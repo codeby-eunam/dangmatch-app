@@ -1,98 +1,523 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Platform,
+  Modal,
+  TextInput,
+  FlatList,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Dimensions,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const FOOD_FILTERS = [
+  { id: 'all',      label: '전체',   emoji: '🍽️' },
+  { id: 'korean',   label: '한식',   emoji: '🍚' },
+  { id: 'japanese', label: '일식',   emoji: '🍣' },
+  { id: 'chinese',  label: '중식',   emoji: '🥢' },
+  { id: 'western',  label: '양식',   emoji: '🍝' },
+  { id: 'snack',    label: '분식',   emoji: '🍢' },
+  { id: 'asian',    label: '아시안', emoji: '🍜' },
+  { id: 'cafe',     label: '카페',   emoji: '☕' },
+];
+
+const API_BASE = 'http://192.168.137.1:3000';
+
+const SUGGESTED_LOCATIONS = [
+  '중앙대학교 근처',
+  '서울역 근처',
+  '홍대입구역 근처',
+  '강남역 근처',
+  '신촌역 근처',
+  '이태원 근처',
+  '종로 근처',
+  '명동 근처',
+];
+
+type KakaoPlace = {
+  place_name: string;
+  address_name: string;
+  naver_url?: string;
+};
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [location, setLocation] = useState('중앙대학교 근처');
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [locating, setLocating] = useState(false);
+  const [searchResults, setSearchResults] = useState<KakaoPlace[]>([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchText.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/kakao/search-location?query=${encodeURIComponent(searchText)}`,
+        );
+        const data = await res.json();
+        setSearchResults(data.documents ?? []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchText]);
+
+  // 현재 위치 가져오기 (expo-location)
+  const handleCurrentLocation = async () => {
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('위치 권한 필요', '위치 권한을 허용해야 현재 위치를 사용할 수 있습니다.');
+        return;
+      }
+      const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: coords.coords.latitude,
+        longitude: coords.coords.longitude,
+      });
+      if (place) {
+        const label = [place.district ?? place.subregion, place.city]
+          .filter(Boolean)
+          .join(' ');
+        setLocation(label ? `${label} 근처` : '현재 위치');
+      } else {
+        setLocation('현재 위치');
+      }
+    } catch {
+      Alert.alert('오류', '위치를 가져오는 데 실패했습니다.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const closeModal = () => {
+    setSearchVisible(false);
+    setSearchText('');
+  };
+
+  const selectLocation = (loc: string) => {
+    setLocation(loc);
+    closeModal();
+  };
+
+  const isSearching = searchText.trim().length >= 2;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* ─── 위치 검색바 ─── */}
+        <View style={styles.searchBar}>
+          <IconSymbol name="location.fill" size={18} color="#FF6B35" />
+
+          {/* 위치 텍스트 (탭 → 검색 모달) */}
+          <TouchableOpacity
+            style={styles.locationTouchable}
+            onPress={() => setSearchVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.locationText} numberOfLines={1}>
+              {locating ? '위치 가져오는 중...' : location}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.searchActions}>
+            {/* 현재 위치 즉시 사용 버튼 */}
+            <TouchableOpacity
+              onPress={handleCurrentLocation}
+              style={styles.actionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              disabled={locating}
+            >
+              {locating ? (
+                <ActivityIndicator size="small" color="#FF6B35" />
+              ) : (
+                <IconSymbol name="location.circle.fill" size={22} color="#6B7280" />
+              )}
+            </TouchableOpacity>
+
+            {/* 검색 버튼 */}
+            <TouchableOpacity
+              onPress={() => setSearchVisible(true)}
+              style={styles.actionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+            >
+              <IconSymbol name="magnifyingglass" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ─── 음식 카테고리 필터 (2×4 그리드) ─── */}
+        <View style={styles.filterGrid}>
+          {FOOD_FILTERS.map((f) => {
+            const active = selectedFilter === f.id;
+            return (
+              <TouchableOpacity
+                key={f.id}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                activeOpacity={0.72}
+                onPress={() => setSelectedFilter(f.id)}
+              >
+                <Text style={styles.filterEmoji}>{f.emoji}</Text>
+                <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ─── 시작하기 버튼 ─── */}
+        <TouchableOpacity style={styles.startButton} activeOpacity={0.85}>
+          <Text style={styles.startButtonText}>시작하기</Text>
+        </TouchableOpacity>
+
+        {/* ─── 서브타이틀 ─── */}
+        <Text style={styles.subtitle}>고민하지 말고, 맛있게!</Text>
+      </ScrollView>
+
+      {/* ════════════════════════════════
+          위치 검색 모달
+          ════════════════════════════════ */}
+      <Modal visible={searchVisible} animationType="slide" statusBarTranslucent>
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            {/* 모달 헤더 */}
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={closeModal}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <IconSymbol name="chevron.left" size={26} color="#1F2937" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>위치 검색</Text>
+              <View style={{ width: 26 }} />
+            </View>
+
+            {/* 검색 입력창 */}
+            <View style={styles.modalSearchBar}>
+              <IconSymbol name="magnifyingglass" size={18} color="#9CA3AF" />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="지역, 주소를 검색하세요"
+                placeholderTextColor="#9CA3AF"
+                value={searchText}
+                onChangeText={setSearchText}
+                autoFocus
+                returnKeyType="search"
+              />
+              {searchText.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchText('')}>
+                  <IconSymbol name="xmark" size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 현재 위치 즉시 사용 */}
+            <TouchableOpacity
+              style={styles.currentLocationBtn}
+              onPress={() => {
+                handleCurrentLocation();
+                closeModal();
+              }}
+            >
+              <IconSymbol name="location.circle.fill" size={20} color="#FF6B35" />
+              <Text style={styles.currentLocationText}>현재 위치 사용</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* 추천 / 검색 결과 목록 */}
+            {searching ? (
+              <ActivityIndicator style={{ marginTop: 32 }} color="#FF6B35" />
+            ) : isSearching ? (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item, i) => item.place_name + i}
+                keyboardShouldPersistTaps="handled"
+                ListHeaderComponent={
+                  <Text style={styles.listSectionHeader}>검색 결과</Text>
+                }
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>검색 결과가 없습니다.</Text>
+                }
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.locationItem}
+                    onPress={() => selectLocation(`${item.place_name} 근처`)}
+                  >
+                    <IconSymbol name="location.fill" size={16} color="#9CA3AF" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.locationItemText}>{item.place_name}</Text>
+                      {item.address_name ? (
+                        <Text style={styles.locationItemSub}>{item.address_name}</Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <FlatList
+                data={SUGGESTED_LOCATIONS}
+                keyExtractor={(item) => item}
+                keyboardShouldPersistTaps="handled"
+                ListHeaderComponent={
+                  <Text style={styles.listSectionHeader}>추천 위치</Text>
+                }
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.locationItem}
+                    onPress={() => selectLocation(item)}
+                  >
+                    <IconSymbol name="location.fill" size={16} color="#9CA3AF" />
+                    <Text style={styles.locationItemText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
+// ── 필터 칩 크기 계산 ──
+const GRID_PADDING = 20;
+const GRID_GAP = 10;
+const CHIP_SIZE = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * 3) / 4;
+
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+
+  /* ── 검색바 ── */
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 20,
+    borderRadius: 50,
+    paddingHorizontal: 18,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  stepContainer: {
-    gap: 8,
+  locationTouchable: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  locationText: {
+    fontSize: 15,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  searchActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionBtn: {
+    padding: 4,
+  },
+
+  /* ── 음식 필터 그리드 ── */
+  filterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: GRID_PADDING,
+    gap: GRID_GAP,
+    marginBottom: 28,
+  },
+  filterChip: {
+    width: CHIP_SIZE,
+    height: CHIP_SIZE * 1.1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  filterChipActive: {
+    backgroundColor: '#FF6B35',
+    shadowColor: '#FF6B35',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  filterEmoji: {
+    fontSize: 26,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  filterLabelActive: {
+    color: '#FFFFFF',
+  },
+
+  /* ── 시작하기 버튼 ── */
+  startButton: {
+    backgroundColor: '#FF6B35',
+    marginHorizontal: 20,
+    borderRadius: 50,
+    paddingVertical: 18,
+    alignItems: 'center',
+    shadowColor: '#FF6B35',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  startButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  /* ── 서브타이틀 ── */
+  subtitle: {
+    textAlign: 'center',
+    color: '#6B7280',
+    fontSize: 15,
+    marginTop: 14,
+  },
+
+  /* ════ 위치 검색 모달 ════ */
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 20,
+    marginTop: 16,
     marginBottom: 8,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 13 : 10,
+    gap: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  modalInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1F2937',
+    padding: 0,
+  },
+  currentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 14,
+  },
+  currentLocationText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FF6B35',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 20,
+    marginBottom: 4,
+  },
+  listSectionHeader: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+  },
+  locationItemText: {
+    fontSize: 15,
+    color: '#1F2937',
+  },
+  locationItemSub: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 14,
+    marginTop: 40,
   },
 });
