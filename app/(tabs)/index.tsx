@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,15 +48,20 @@ const SUGGESTED_LOCATIONS = [
 type KakaoPlace = {
   place_name: string;
   address_name: string;
+  x: string; // 경도
+  y: string; // 위도
   naver_url?: string;
 };
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [location, setLocation] = useState('중앙대학교 근처');
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [locating, setLocating] = useState(false);
+  const [startLoading, setStartLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<KakaoPlace[]>([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,10 +101,9 @@ export default function HomeScreen() {
         return;
       }
       const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const [place] = await Location.reverseGeocodeAsync({
-        latitude: coords.coords.latitude,
-        longitude: coords.coords.longitude,
-      });
+      const { latitude, longitude } = coords.coords;
+      setLocationCoords({ lat: latitude, lng: longitude });
+      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (place) {
         const label = [place.district ?? place.subregion, place.city]
           .filter(Boolean)
@@ -119,9 +124,49 @@ export default function HomeScreen() {
     setSearchText('');
   };
 
-  const selectLocation = (loc: string) => {
-    setLocation(loc);
+  const selectLocation = (name: string, lat?: number, lng?: number) => {
+    setLocation(name);
+    if (lat !== undefined && lng !== undefined) {
+      setLocationCoords({ lat, lng });
+    } else {
+      setLocationCoords(null);
+    }
     closeModal();
+  };
+
+  const handleStart = async () => {
+    setStartLoading(true);
+    try {
+      let coords = locationCoords;
+      if (!coords) {
+        const query = location.replace(' 근처', '');
+        const res = await fetch(
+          `${API_BASE}/api/kakao/search-location?query=${encodeURIComponent(query)}`,
+        );
+        const data = await res.json();
+        if (data.documents?.length > 0) {
+          const first = data.documents[0];
+          coords = { lat: parseFloat(first.y), lng: parseFloat(first.x) };
+          setLocationCoords(coords);
+        } else {
+          Alert.alert('위치 오류', '위치를 찾을 수 없습니다. 검색창에서 위치를 다시 설정해주세요.');
+          return;
+        }
+      }
+      router.push({
+        pathname: '/mode-select' as any,
+        params: {
+          lat: String(coords.lat),
+          lng: String(coords.lng),
+          locationName: location,
+          categoryFilter: selectedFilter,
+        },
+      });
+    } catch {
+      Alert.alert('오류', '위치 확인에 실패했습니다.');
+    } finally {
+      setStartLoading(false);
+    }
   };
 
   const isSearching = searchText.trim().length >= 2;
@@ -194,8 +239,17 @@ export default function HomeScreen() {
         </View>
 
         {/* ─── 시작하기 버튼 ─── */}
-        <TouchableOpacity style={styles.startButton} activeOpacity={0.85}>
-          <Text style={styles.startButtonText}>시작하기</Text>
+        <TouchableOpacity
+          style={styles.startButton}
+          activeOpacity={0.85}
+          onPress={handleStart}
+          disabled={startLoading}
+        >
+          {startLoading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.startButtonText}>시작하기</Text>
+          )}
         </TouchableOpacity>
 
         {/* ─── 서브타이틀 ─── */}
@@ -273,7 +327,13 @@ export default function HomeScreen() {
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.locationItem}
-                    onPress={() => selectLocation(`${item.place_name} 근처`)}
+                    onPress={() =>
+                      selectLocation(
+                        `${item.place_name} 근처`,
+                        parseFloat(item.y),
+                        parseFloat(item.x),
+                      )
+                    }
                   >
                     <IconSymbol name="location.fill" size={16} color="#9CA3AF" />
                     <View style={{ flex: 1 }}>
