@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  Modal,
   StyleSheet,
+  TextInput,
   View,
   Text,
   TouchableOpacity,
-  Linking,
-  Dimensions,
-  Alert,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { WebView } from 'react-native-webview';
+import { useLibrary, type Place } from '@/context/LibraryContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const BG_TEAL = '#1E7874';
+const ORANGE = '#F57C4A';
 
 type Restaurant = {
   id: string;
@@ -22,11 +26,27 @@ type Restaurant = {
   road_address_name: string;
   phone: string;
   place_url: string;
-  naver_url?: string;
 };
 
-function getCategoryLabel(raw: string) {
-  return raw?.split('>').pop()?.trim() ?? '음식점';
+
+
+function buildWebUrl(r: Restaurant): string {
+  if (r.place_url) return r.place_url;
+  return `https://place.map.kakao.com/${r.id}`;
+}
+
+function toPlace(r: Restaurant): Place {
+  const categoryShort = r.category_name?.split(' > ').pop() ?? r.category_name ?? '기타';
+  const isKafe = r.category_name?.includes('카페');
+  return {
+    id: r.id,
+    name: r.place_name,
+    category: isKafe ? '카페' : '식당',
+    categoryName: categoryShort,
+    address: r.road_address_name || r.address_name || '',
+    image: `https://picsum.photos/seed/${r.id}/200/200`,
+    placeUrl: r.place_url ?? '',
+  };
 }
 
 export default function SwipeScreen() {
@@ -35,13 +55,20 @@ export default function SwipeScreen() {
     restaurants: string;
     locationName: string;
   }>();
+  const { lists, addList, addPlacesToList } = useLibrary();
 
   const restaurants: Restaurant[] = JSON.parse(json || '[]');
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState<Restaurant[]>([]);
   const [done, setDone] = useState(false);
 
+  // 보관함 모달 상태
+  const [saveModalVisible, setSaveModalVisible] = useState(false);
+  const [saveMode, setSaveMode] = useState<'select' | 'new'>('select');
+  const [newListName, setNewListName] = useState('');
+
   const current = restaurants[index];
+  const progress = restaurants.length > 0 ? (index + 1) / restaurants.length : 0;
 
   const advance = (like: boolean) => {
     const next = [...liked, ...(like ? [current] : [])];
@@ -54,272 +81,719 @@ export default function SwipeScreen() {
     }
   };
 
-  if (done) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <IconSymbol name="chevron.left" size={26} color="#1F2937" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>찜 목록</Text>
-          <View style={{ width: 26 }} />
-        </View>
+  const goToResult = (likedList: Restaurant[]) => {
+    if (likedList.length === 1) {
+      router.push({
+        pathname: '/result' as any,
+        params: { restaurant: JSON.stringify(likedList[0]) },
+      });
+    } else if (likedList.length >= 2) {
+      router.push({
+        pathname: '/tournament' as any,
+        params: { restaurants: JSON.stringify(likedList), locationName },
+      });
+    }
+  };
 
-        {liked.length === 0 ? (
-          <View style={styles.emptyCenter}>
-            <Text style={styles.emptyEmoji}>😅</Text>
-            <Text style={styles.emptyTitle}>찜한 가게가 없어요</Text>
-            <Text style={styles.emptyDesc}>다시 해볼까요?</Text>
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={() => { setIndex(0); setLiked([]); setDone(false); }}
-            >
-              <Text style={styles.retryBtnText}>다시 하기</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.resultHeader}>찜한 가게 {liked.length}개</Text>
-            {liked.map((r) => (
-              <TouchableOpacity
-                key={r.id}
-                style={styles.resultItem}
-                onPress={() => r.naver_url && Linking.openURL(r.naver_url)}
-                activeOpacity={0.75}
-              >
-                <View style={styles.resultBadge}>
-                  <Text style={styles.resultBadgeText}>{getCategoryLabel(r.category_name)}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.resultName}>{r.place_name}</Text>
-                  <Text style={styles.resultAddress} numberOfLines={1}>
-                    {r.road_address_name || r.address_name}
-                  </Text>
-                </View>
-                <Text style={styles.resultArrow}>›</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              style={styles.homeBtn}
-              onPress={() => router.navigate('/(tabs)' as any)}
-            >
-              <Text style={styles.homeBtnText}>홈으로</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </SafeAreaView>
-    );
-  }
+  const openSaveModal = () => {
+    setSaveMode(lists.length === 0 ? 'new' : 'select');
+    setNewListName('');
+    setSaveModalVisible(true);
+  };
+
+  const handleAddToExisting = (listId: string) => {
+    addPlacesToList(listId, liked.map(toPlace));
+    setSaveModalVisible(false);
+    Alert.alert('추가 완료', '보관함에 가게가 추가되었어요!');
+  };
+
+  const handleCreateNew = () => {
+    const name = newListName.trim();
+    if (!name) return;
+    const places = liked.map(toPlace);
+    const cafeCount = places.filter((p) => p.category === '카페').length;
+    const type: '식당' | '카페' = cafeCount > places.length / 2 ? '카페' : '식당';
+    const icon = type === '카페' ? 'local-cafe' : 'restaurant';
+    const rawImages = places.slice(0, 4).map((p) => p.image);
+    const fallback = rawImages[0] ?? 'https://picsum.photos/seed/default/200/200';
+    const images = [...rawImages];
+    while (images.length < 4) images.push(fallback);
+    addList({
+      id: Date.now().toString(),
+      title: name,
+      count: places.length,
+      type,
+      icon,
+      images,
+      places,
+      isPublic: false,
+    });
+    setSaveModalVisible(false);
+    Alert.alert('보관함 생성 완료', `"${name}" 보관함이 만들어졌어요!`);
+  };
 
   if (!current) return null;
 
+  const webUrl = buildWebUrl(current);
+
+  /* ── 스와이프 화면 ── */
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={26} color="#1F2937" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>스와이프</Text>
-        <Text style={styles.counter}>{index + 1} / {restaurants.length}</Text>
+        <Text style={styles.logo}>Dangmatch</Text>
+        <View style={styles.counterBadge}>
+          <Text style={styles.counterIcon}>🍴</Text>
+          <Text style={styles.counterText}>{index + 1}/{restaurants.length}</Text>
+        </View>
+      </View>
+
+      {/* 서브타이틀 */}
+      <View style={styles.subtitleRow}>
+        <Text style={styles.subtitleText}>오늘의 탐색 리스트</Text>
+        <View style={styles.subtitleIcons}>
+          <Text style={styles.subtitleIcon}>🍱</Text>
+          <Text style={styles.subtitleIcon}>🥗</Text>
+        </View>
       </View>
 
       {/* 진행 바 */}
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${((index + 1) / restaurants.length) * 100}%` }]} />
+        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
 
-      {/* 카드 */}
-      <View style={styles.cardArea}>
-        <View style={styles.card}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{getCategoryLabel(current.category_name)}</Text>
-          </View>
-          <Text style={styles.restaurantName}>{current.place_name}</Text>
-          <Text style={styles.restaurantAddress}>
-            {current.road_address_name || current.address_name}
-          </Text>
-          {current.phone ? (
-            <TouchableOpacity onPress={() => Linking.openURL(`tel:${current.phone}`)}>
-              <Text style={styles.phone}>📞 {current.phone}</Text>
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={styles.mapLink}
-            activeOpacity={0.7}
-            onPress={() => current.naver_url && Linking.openURL(current.naver_url)}
-          >
-            <Text style={styles.mapLinkText}>지도에서 보기 →</Text>
-          </TouchableOpacity>
+      {/* WebView + 오늘의 픽 버튼 */}
+      <View style={styles.webCardContainer}>
+        <View style={styles.webViewWrapper}>
+          <WebView
+            key={webUrl}
+            source={{ uri: webUrl }}
+            style={styles.webView}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+            renderLoading={() => (
+              <View style={styles.loader}>
+                <ActivityIndicator size="large" color={ORANGE} />
+                <Text style={styles.loaderText}>맛집 정보를 불러오는 중...</Text>
+              </View>
+            )}
+          />
         </View>
-
-        {/* 찜 카운트 */}
-        <Text style={styles.likedCount}>❤️ {liked.length}개 찜</Text>
+        <TouchableOpacity
+          style={styles.todayPickBtn}
+          onPress={() => goToResult([current])}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.todayPickText}>⭐ 오늘의 픽!</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 액션 버튼 */}
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.passBtn]}
-          onPress={() => advance(false)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.passIcon}>✕</Text>
-          <Text style={styles.passBtnText}>패스</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.likeBtn]}
-          onPress={() => advance(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.likeIcon}>♥</Text>
-          <Text style={styles.likeBtnText}>찜</Text>
-        </TouchableOpacity>
+        <View style={styles.actionItem}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.passBtn]}
+            onPress={() => advance(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.passIcon}>✕</Text>
+          </TouchableOpacity>
+          <Text style={styles.actionLabel}>PASS</Text>
+        </View>
+
+        <View style={styles.actionItem}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.yumiBtn]}
+            onPress={() => advance(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.yumiIcon}>🍴</Text>
+          </TouchableOpacity>
+          <Text style={[styles.actionLabel, styles.yumiLabel]}>YUMI!</Text>
+        </View>
       </View>
+
+      {/* 하단 선택 상태 버튼 (항상 표시) */}
+      <View style={styles.bottomCta}>
+        {liked.length === 0 ? (
+          <View style={[styles.ctaBtn, styles.ctaDisabled]}>
+            <Text style={styles.ctaDisabledText}>토너먼트 시작 불가</Text>
+          </View>
+        ) : liked.length === 1 ? (
+          <TouchableOpacity
+            style={[styles.ctaBtn, styles.ctaOrange]}
+            onPress={() => goToResult(liked)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaText}>🏆 바로 우승! (1개 선택)</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.ctaBtn, styles.ctaTeal]}
+            onPress={() => goToResult(liked)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaText}>토너먼트 바로 진행하기 ({liked.length}개)</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── 완료 오버레이 ── */}
+      {done && (
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            {/* 타이틀 */}
+            <Text style={styles.sheetTitle}>선택한 가게 목록</Text>
+            <View style={styles.divider} />
+
+            {/* 가게 리스트 - 높이 고정, 내부 스크롤 */}
+            <View style={styles.likedSection}>
+              {liked.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyEmoji}>😅</Text>
+                  <Text style={styles.emptyText}>선택한 가게가 없어요</Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {liked.map((r, i) => (
+                    <View key={r.id} style={styles.likedItem}>
+                      <Text style={styles.likedIndex}>{i + 1}</Text>
+                      <Text style={styles.likedName} numberOfLines={1}>{r.place_name}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+
+            <View style={styles.sheetDivider} />
+
+            {/* 보관함 추가 버튼 */}
+            {liked.length > 0 && (
+              <TouchableOpacity
+                style={[styles.ctaBtn, styles.ctaBookmark]}
+                onPress={openSaveModal}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.ctaBookmarkText}>🗂 보관함에 추가하기</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 메인 CTA */}
+            {liked.length === 0 ? (
+              <View style={[styles.ctaBtn, styles.ctaDisabled]}>
+                <Text style={styles.ctaDisabledText}>토너먼트 시작 불가 (선택 없음)</Text>
+              </View>
+            ) : liked.length === 1 ? (
+              <TouchableOpacity
+                style={[styles.ctaBtn, styles.ctaOrange]}
+                onPress={() => goToResult(liked)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.ctaText}>🏆 바로 우승!</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.ctaBtn, styles.ctaTeal]}
+                onPress={() => goToResult(liked)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.ctaText}>토너먼트 바로 진행하기 ({liked.length}개)</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 홈 이동 */}
+            <TouchableOpacity
+              style={styles.homeBtn}
+              onPress={() => router.navigate('/(tabs)' as any)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.homeBtnText}>홈화면으로 이동하기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* ── 보관함 추가 모달 ── */}
+      <Modal
+        visible={saveModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSaveModalVisible(false)}
+      >
+        <View style={styles.modalBg}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setSaveModalVisible(false)}
+          />
+          <View style={styles.saveSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.saveSheetTitle}>보관함에 추가하기</Text>
+
+            {/* 탭 선택 */}
+            <View style={styles.tabRow}>
+              <TouchableOpacity
+                style={[styles.tabBtn, saveMode === 'select' && styles.tabBtnOn]}
+                onPress={() => setSaveMode('select')}
+                disabled={lists.length === 0}
+              >
+                <Text style={[styles.tabTxt, saveMode === 'select' && styles.tabTxtOn]}>
+                  기존 보관함에 추가
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, saveMode === 'new' && styles.tabBtnOn]}
+                onPress={() => setSaveMode('new')}
+              >
+                <Text style={[styles.tabTxt, saveMode === 'new' && styles.tabTxtOn]}>
+                  새 보관함 만들기
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {saveMode === 'select' ? (
+              /* 기존 보관함 목록 */
+              lists.length === 0 ? (
+                <View style={styles.noListBox}>
+                  <Text style={styles.noListEmoji}>📂</Text>
+                  <Text style={styles.noListText}>아직 보관함이 없어요</Text>
+                  <Text style={styles.noListSub}>새 보관함 탭에서 만들어보세요</Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.listScroll} showsVerticalScrollIndicator={false}>
+                  {lists.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.listRow}
+                      onPress={() => handleAddToExisting(item.id)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.listIconWrap}>
+                        <Text style={styles.listIconEmoji}>🗂</Text>
+                      </View>
+                      <View style={styles.listInfo}>
+                        <Text style={styles.listName} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.listCount}>가게 {item.count}개</Text>
+                      </View>
+                      <Text style={styles.listArrow}>›</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )
+            ) : (
+              /* 새 보관함 만들기 */
+              <View style={styles.newListWrap}>
+                <TextInput
+                  style={styles.nameInput}
+                  placeholder="보관함 이름을 입력해주세요"
+                  placeholderTextColor="#9CA3AF"
+                  value={newListName}
+                  onChangeText={setNewListName}
+                  maxLength={30}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={handleCreateNew}
+                />
+                <Text style={styles.charCount}>{newListName.length} / 30</Text>
+                <TouchableOpacity
+                  style={[styles.createBtn, !newListName.trim() && styles.createBtnDisabled]}
+                  onPress={handleCreateNew}
+                  disabled={!newListName.trim()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.createBtnTxt}>
+                    보관함 만들고 저장하기 ({liked.length}개)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setSaveModalVisible(false)}
+            >
+              <Text style={styles.cancelTxt}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
+  /* ── 공통 ── */
+  container: { flex: 1, backgroundColor: BG_TEAL },
 
+  /* ── 헤더 ── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  backIcon: { fontSize: 32, color: '#FFFFFF', lineHeight: 36, fontWeight: '300' },
+  logo: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
+  counterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 4,
+  },
+  counterIcon: { fontSize: 13 },
+  counterText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+
+  /* ── 서브타이틀 ── */
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  subtitleText: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  subtitleIcons: { flexDirection: 'row', gap: 4 },
+  subtitleIcon: { fontSize: 16 },
+
+  /* ── 진행 바 ── */
+  progressTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: 24,
+    borderRadius: 2,
+  },
+  progressFill: { height: 4, backgroundColor: ORANGE, borderRadius: 2 },
+
+  /* ── WebView ── */
+  webCardContainer: {
+    flex: 1,
+    marginHorizontal: 12,
+    marginTop: 10,
+    position: 'relative',
+  },
+  webViewWrapper: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+  },
+  todayPickBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: ORANGE,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+    zIndex: 10,
+  },
+  todayPickText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  webView: { flex: 1 },
+  loader: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loaderText: { color: '#666', fontSize: 14 },
+
+  /* ── 액션 버튼 ── */
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: 28,
+    paddingBottom: 10,
+    paddingTop: 8,
+  },
+  actionItem: { alignItems: 'center', gap: 5 },
+  actionBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  passBtn: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.22)' },
+  yumiBtn: { width: 60, height: 60, borderRadius: 30, backgroundColor: ORANGE },
+  passIcon: { fontSize: 23, color: '#FFFFFF' },
+  yumiIcon: { fontSize: 23, color: '#FFFFFF' },
+  actionLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.75)', letterSpacing: 0.5 },
+  yumiLabel: { color: ORANGE },
+  bottomCta: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 28,
+  },
+
+  /* ── 완료 오버레이 ── */
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+    zIndex: 999,
+    elevation: 999,
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 36,
+    gap: 10,
+    maxHeight: '90%',
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 4,
+  },
+  likedSection: {
+    maxHeight: 160,
+  },
+  likedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  counter: { fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
-
-  progressTrack: {
-    height: 3,
+  likedIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: BG_TEAL,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  likedName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  emptyEmoji: { fontSize: 40 },
+  emptyText: { fontSize: 15, color: '#9CA3AF', fontWeight: '500' },
+  sheetDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 4,
+  },
+  ctaBtn: {
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  ctaDisabled: {
     backgroundColor: '#E5E7EB',
   },
-  progressFill: {
-    height: 3,
-    backgroundColor: '#FF6B35',
-  },
-
-  cardArea: { flex: 1, padding: 20, justifyContent: 'center', gap: 12 },
-
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 28,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+  ctaOrange: {
+    backgroundColor: ORANGE,
+    shadowColor: '#C9540A',
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 4 },
     elevation: 5,
   },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFF3EE',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
+  ctaTeal: {
+    backgroundColor: BG_TEAL,
+    shadowColor: '#0D4B48',
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
-  categoryText: { fontSize: 12, color: '#FF6B35', fontWeight: '600' },
-  restaurantName: { fontSize: 24, fontWeight: '800', color: '#111827' },
-  restaurantAddress: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
-  phone: { fontSize: 14, color: '#374151' },
-  mapLink: {
+  ctaBookmark: {
     backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginTop: 4,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
   },
-  mapLinkText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-
-  likedCount: { textAlign: 'center', fontSize: 13, color: '#9CA3AF' },
-
-  actions: {
-    flexDirection: 'row',
-    paddingHorizontal: 40,
-    paddingBottom: 32,
-    paddingTop: 12,
-    gap: 16,
-  },
-  actionBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 18,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  passBtn: { backgroundColor: '#FFFFFF' },
-  likeBtn: { backgroundColor: '#FF6B35' },
-  passIcon: { fontSize: 22, color: '#9CA3AF' },
-  passBtnText: { fontSize: 15, fontWeight: '700', color: '#9CA3AF' },
-  likeIcon: { fontSize: 22, color: '#FFFFFF' },
-  likeBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-
-  /* 결과 화면 */
-  resultHeader: {
+  ctaText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#374151',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    color: '#FFFFFF',
   },
-  resultItem: {
-    flexDirection: 'row',
+  ctaDisabledText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  ctaBookmarkText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  homeBtn: {
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
-    gap: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  homeBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+
+  /* ── 보관함 모달 ── */
+  modalBg: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  saveSheet: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 20,
-    marginBottom: 10,
-    borderRadius: 16,
-    padding: 16,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 36,
+    gap: 16,
+    maxHeight: '70%',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  saveSheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+  },
+
+  /* 탭 */
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  tabBtnOn: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
-  resultBadge: {
-    backgroundColor: '#FFF3EE',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  resultBadgeText: { fontSize: 11, color: '#FF6B35', fontWeight: '600' },
-  resultName: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  resultAddress: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  resultArrow: { fontSize: 20, color: '#D1D5DB' },
+  tabTxt: { fontSize: 13, fontWeight: '500', color: '#9CA3AF' },
+  tabTxtOn: { color: '#111827', fontWeight: '700' },
 
-  homeBtn: {
-    margin: 20,
-    backgroundColor: '#FF6B35',
-    borderRadius: 50,
-    paddingVertical: 16,
+  /* 기존 보관함 목록 */
+  noListBox: { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  noListEmoji: { fontSize: 38 },
+  noListText: { fontSize: 15, fontWeight: '600', color: '#374151' },
+  noListSub: { fontSize: 13, color: '#9CA3AF' },
+
+  listScroll: { maxHeight: 240 },
+  listRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  homeBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-
-  emptyCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  emptyEmoji: { fontSize: 56, marginBottom: 8 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
-  emptyDesc: { fontSize: 14, color: '#9CA3AF' },
-  retryBtn: {
-    marginTop: 16,
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 32,
     paddingVertical: 14,
-    borderRadius: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+    gap: 12,
   },
-  retryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  listIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listIconEmoji: { fontSize: 20 },
+  listInfo: { flex: 1 },
+  listName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
+  listCount: { fontSize: 12, color: '#9CA3AF' },
+  listArrow: { fontSize: 22, color: '#D1D5DB', fontWeight: '300' },
+
+  /* 새 보관함 만들기 */
+  newListWrap: { gap: 8 },
+  nameInput: {
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: '#111827',
+    backgroundColor: '#FAFAFA',
+  },
+  charCount: { fontSize: 12, color: '#9CA3AF', textAlign: 'right' },
+  createBtn: {
+    backgroundColor: BG_TEAL,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  createBtnDisabled: { backgroundColor: '#E5E7EB' },
+  createBtnTxt: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+
+  cancelBtn: {
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  cancelTxt: { fontSize: 15, fontWeight: '600', color: '#374151' },
 });
