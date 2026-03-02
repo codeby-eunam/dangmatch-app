@@ -16,8 +16,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useUser } from '@/context/UserContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -55,11 +56,16 @@ type KakaoPlace = {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { hasSeenLanding } = useUser();
+
+  if (!hasSeenLanding) {
+    return <Redirect href="/landing" />;
+  }
   const [location, setLocation] = useState('중앙대학교 근처');
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [selectedFilters, setSelectedFilters] = useState<string[]>(['all']);
   const [locating, setLocating] = useState(false);
   const [startLoading, setStartLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<KakaoPlace[]>([]);
@@ -159,7 +165,7 @@ export default function HomeScreen() {
           lat: String(coords.lat),
           lng: String(coords.lng),
           locationName: location,
-          categoryFilter: selectedFilter,
+          categoryFilters: selectedFilters.join(','),
         },
       });
     } catch {
@@ -221,13 +227,26 @@ export default function HomeScreen() {
         {/* ─── 음식 카테고리 필터 (2×4 그리드) ─── */}
         <View style={styles.filterGrid}>
           {FOOD_FILTERS.map((f) => {
-            const active = selectedFilter === f.id;
+            const active = selectedFilters.includes(f.id);
             return (
               <TouchableOpacity
                 key={f.id}
                 style={[styles.filterChip, active && styles.filterChipActive]}
                 activeOpacity={0.72}
-                onPress={() => setSelectedFilter(f.id)}
+                onPress={() => {
+                  if (f.id === 'all') {
+                    setSelectedFilters(['all']);
+                  } else {
+                    setSelectedFilters((prev) => {
+                      const without = prev.filter((id) => id !== 'all');
+                      const exists = without.includes(f.id);
+                      const next = exists
+                        ? without.filter((id) => id !== f.id)
+                        : [...without, f.id];
+                      return next.length === 0 ? ['all'] : next;
+                    });
+                  }
+                }}
               >
                 <Text style={styles.filterEmoji}>{f.emoji}</Text>
                 <Text style={[styles.filterLabel, active && styles.filterLabelActive]}>
