@@ -7,12 +7,11 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { WebView } from 'react-native-webview';
+import KakaoWebView from '@/components/KakaoWebView';
 import { useLibrary, type Place } from '@/context/LibraryContext';
 // ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
 import { logCardViewed, logRestaurantSelected } from '@/lib/analytics';
@@ -170,20 +169,12 @@ export default function SwipeScreen() {
       {/* WebView + 오늘의 픽 버튼 */}
       <View style={styles.webCardContainer}>
         <View style={styles.webViewWrapper}>
-          <WebView
-            key={webUrl}
-            source={{ uri: webUrl }}
-            style={styles.webView}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
-            userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-            renderLoading={() => (
-              <View style={styles.loader}>
-                <ActivityIndicator size="large" color={ORANGE} />
-                <Text style={styles.loaderText}>맛집 정보를 불러오는 중...</Text>
-              </View>
-            )}
+          <KakaoWebView
+            uri={webUrl}
+            placeName={current.place_name}
+            category={current.category_name?.split(' > ').pop()}
+            address={current.road_address_name || current.address_name}
+            phone={current.phone}
           />
         </View>
         <TouchableOpacity
