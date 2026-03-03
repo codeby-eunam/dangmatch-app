@@ -10,23 +10,19 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRouter } from 'expo-router';
-import { CommonActions } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useUser } from '@/context/UserContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
 
 export default function LandingScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const { loginWithKakao, setHasSeenLanding, isLoggedIn, hasSeenLanding } = useUser();
   const [loading, setLoading] = useState(false);
 
   // 로그인 성공 or 비로그인 시작 → 홈 탭 (index)
   useEffect(() => {
     if (isLoggedIn || hasSeenLanding) {
-      navigation.dispatch(
-        CommonActions.reset({ index: 0, routes: [{ name: '(tabs)' }] })
-      );
+      router.replace('/(tabs)');
     }
   }, [isLoggedIn, hasSeenLanding]);
 
