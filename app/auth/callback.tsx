@@ -14,31 +14,35 @@ export default function AuthCallbackScreen() {
   const { processOAuthParams } = useUser();
   const params = useLocalSearchParams<Record<string, string>>();
 
-  useEffect(() => {
-    // 웹: 현재 창이 /auth/callback으로 리다이렉트된 경우 → 여기서 직접 처리
-    if (Platform.OS === 'web') {
-      try {
-        // params가 비어있으면 아직 로딩 중
-        if (!params.kakaoId && !params.error) return;
+	useEffect(() => {
+		if (Platform.OS !== 'web') return; // 웹에서만 처리
 
-        if (params.error) {
-          router.replace('/landing');
-          return;
-        }
+		if (!params.kakaoId && !params.error) return; // 파라미터 없으면 대기
 
-        const result = processOAuthParams(params);
-        if (result.needsSetup) {
-          router.replace({
-            pathname: '/setup-profile',
-            params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
-          });
-        } else {
-          router.replace('/(tabs)');
-        }
-      } catch {
-        router.replace('/landing');
-      }
-      return;
+		// 레이아웃 마운트 기다린 후 실행
+		const timer = setTimeout(() => {
+			try {
+			if (params.error) {
+				router.replace('/landing');
+				return;
+			}
+
+			const result = processOAuthParams(params);
+			if (result.needsSetup) {
+				router.replace({
+				pathname: '/setup-profile',
+				params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+				});
+			} else {
+				router.replace('/(tabs)');
+			}
+			} catch {
+			router.replace('/landing');
+			}
+		}, 300); // 300ms 후 실행
+
+		return () => clearTimeout(timer);
+	}, [params.kakaoId, params.error]);
     }
 
     // Android/Expo Go: 딥링크로 이 화면에 도달한 경우
