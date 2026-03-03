@@ -27,7 +27,7 @@ const CARD_GAP = 12;
 const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const IMG_SIZE = CARD_W / 2;
 
-const BASE_URL = 'https://dangmatch-y7al-meow92070-8568s-projects.vercel.app';
+const BASE_URL = Platform.OS === 'web' ? '' : 'https://dangmatch.vercel.app';
 
 
 export default function LibraryScreen() {
