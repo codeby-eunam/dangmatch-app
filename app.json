@@ -5,13 +5,24 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dangmatchapp",
+    "scheme": "dangmatch",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
+		"intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            {
+              "scheme": "dangmatch"
+            }
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,12 +30,35 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true,
+      "package": "com.anonymous.dangmatchapp"
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
+		"bundler": "metro",
+		"favicon": "./assets/dangmatch_logo.png",
+		"pwa": {
+			"name": "당매치",
+			"shortName": "당매치",
+			"description": "당신의 메뉴 선택을 더욱 쉽게!",
+			"themeColor": "#006D77",
+			"backgroundColor": "#EDF6F9",
+			"display": "standalone",
+			"orientation": "portrait",
+			"icons": [
+			{
+				"src": "./assets/dangmatch_logo.png",
+				"sizes": "192x192",
+				"type": "image/png"
+			},
+			{
+				"src": "./assets/dangmatch_logo.png",
+				"sizes": "512x512",
+				"type": "image/png"
+			}
+			]
+		}
+	},
     "plugins": [
       "expo-router",
       [
@@ -43,6 +77,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3298d7c7-7c9a-4c2d-98f5-f2bcdce4cc29"
+      }
     }
   }
 }
