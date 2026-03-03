@@ -13,6 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useUser } from '@/context/UserContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
+import * as ExpoLinking from 'expo-linking';
+
+const API_BASE = 'https://dangmatch.vercel.app';
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -27,25 +30,27 @@ export default function LandingScreen() {
   }, [isLoggedIn, hasSeenLanding]);
 
   const handleKakaoLogin = async () => {
-    setLoading(true);
-    try {
-      const result = await loginWithKakao();
-      if (result === null) {
-        // Android/Expo Go: auth/callback.tsx 가 처리 (아무것도 안 해도 됨)
-        return;
-      }
-      if (result.needsSetup) {
-        router.replace({
-          pathname: '/setup-profile',
-          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
-        });
-      }
-      // iOS 기존 유저: isLoggedIn → useEffect 가 /(tabs)로 이동
-    } catch (err) {
-      Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
+	setLoading(true);
+	try {
+		if (Platform.OS === 'web') {
+		// 웹: 현재 창이 리다이렉트되므로 그냥 이동 (결과 처리는 auth/callback.tsx에서)
+		const redirectUri = ExpoLinking.createURL('auth/callback');
+		window.location.href = `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`;
+		return; // setLoading(false) 안 해도 됨 (페이지 이동하니까)
+		}
+
+		const result = await loginWithKakao();
+		if (result === null) return;
+		if (result.needsSetup) {
+		router.replace({
+			pathname: '/setup-profile',
+			params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+		});
+		}
+	} catch (err) {
+		Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
+		setLoading(false);
+	}
   };
 
   const handleSkip = () => {
