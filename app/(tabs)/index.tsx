@@ -38,7 +38,7 @@ const FOOD_FILTERS = [
   { id: 'cafe',     label: '카페',   emoji: '☕' },
 ];
 
-const API_BASE = Platform.OS === 'web' ? '' : 'https://dangmatch.vercel.app';
+const API_BASE = 'https://dangmatch.vercel.app';
 
 const RECENT_KEY = 'recentLocationSearches';
 

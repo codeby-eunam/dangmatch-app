@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useUser } from '@/context/UserContext';
 
-const API_BASE = Platform.OS === 'web' ? '' : 'https://dangmatch.vercel.app';
+const API_BASE = 'https://dangmatch.vercel.app';
 
 interface Props {
   bottomOffset?: number;
