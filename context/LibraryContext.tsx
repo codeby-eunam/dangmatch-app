@@ -47,7 +47,7 @@ interface LibraryContextValue {
 
 // ─── 상수 ──────────────────────────────────────────────────────────────────
 
-const BASE_URL = typeof window !== 'undefined' ? '' : 'https://dangmatch.vercel.app';
+const BASE_URL = 'https://dangmatch.vercel.app';
 const TOGGLE_DEBOUNCE_MS = 1500;
 
 // ─── API 헬퍼 ──────────────────────────────────────────────────────────────
