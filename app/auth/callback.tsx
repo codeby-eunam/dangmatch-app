@@ -43,7 +43,6 @@ export default function AuthCallbackScreen() {
 
 		return () => clearTimeout(timer);
 	}, [params.kakaoId, params.error]);
-    }
 
     // Android/Expo Go: 딥링크로 이 화면에 도달한 경우
     try {
