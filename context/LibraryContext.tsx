@@ -47,7 +47,7 @@ interface LibraryContextValue {
 
 // ─── 상수 ──────────────────────────────────────────────────────────────────
 
-const BASE_URL = 'https://dangmatch-m5moq6aho-meow92070-8568s-projects.vercel.app';
+const BASE_URL = 'https://dangmatch-git-develop-meow92070-8568s-projects.vercel.app';
 const TOGGLE_DEBOUNCE_MS = 1500;
 
 // ─── API 헬퍼 ──────────────────────────────────────────────────────────────
