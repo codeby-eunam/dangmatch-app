@@ -151,6 +151,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     setListsLoading(true);
     apiFetch<{ lists: any[] }>(`${BASE_URL}/api/lists?uid=${user.kakaoId}`)
       .then((data) => {
+		console.log('🔥 raw lists:', JSON.stringify(data.lists, null, 2));
         if (cancelled) return;
         const loaded: ListItem[] = (data.lists ?? []).map(toListItem);
         setLists(loaded);
