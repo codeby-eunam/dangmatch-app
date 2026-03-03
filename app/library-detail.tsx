@@ -21,14 +21,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLibrary } from '@/context/LibraryContext';
+import { useLibrary, type Place } from '@/context/LibraryContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;
 const CARD_GAP = 12;
 const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const IMG_H = Math.round(CARD_W * 0.72);
-const BASE_URL = 'http://192.168.137.1:3000';
+const BASE_URL = 'https://dangmatch-m5moq6aho-meow92070-8568s-projects.vercel.app';
 const BOTTOM_BAR_H = Platform.OS === 'ios' ? 84 : 64;
 const REORDER_ITEM_H = 72;
 
@@ -61,7 +62,7 @@ export default function LibraryDetailScreen() {
     restaurants: string;
   }>();
 
-  const { lists, deleteList, renameList, removePlaceFromList } = useLibrary();
+  const { lists, addPlacesToList, deleteList, renameList, removePlaceFromList } = useLibrary();
 
   /* Context에 해당 listId가 있으면 Context 데이터 우선 사용 */
   const contextList = lists.find((l) => l.id === listId);
@@ -136,17 +137,28 @@ export default function LibraryDetailScreen() {
   const handleAddRestaurant = (result: SearchResult) => {
     if (restaurantList.some((r) => r.id === result.id)) return;
     const categoryShort = result.category_name?.split(' > ').pop() || result.category_group_name || '기타';
-    const newItem: Restaurant = {
-      id: result.id, name: result.place_name,
-      desc: result.road_address_name || result.address_name || '',
-      hearts: 0, category: categoryShort,
-      image: `https://picsum.photos/seed/${result.id}/300/220`,
-    };
-    if (contextList) {
-      // Context가 있을 때는 context에만 추가 (view는 contextList에서 자동 반영)
-      // Context에 없는 경우만 local 업데이트
+    if (contextList && listId) {
+      const newPlace: Place = {
+        id: result.id,
+        name: result.place_name,
+        category: result.category_name?.includes('카페') ? '카페' : '식당',
+        categoryName: categoryShort,
+        address: result.road_address_name || result.address_name || '',
+        image: `https://picsum.photos/seed/${result.id}/300/220`,
+        placeUrl: result.place_url ?? '',
+      };
+      addPlacesToList(listId, [newPlace]);
+    } else {
+      setLocalList((prev) => [
+        ...prev,
+        {
+          id: result.id, name: result.place_name,
+          desc: result.road_address_name || result.address_name || '',
+          hearts: 0, category: categoryShort,
+          image: `https://picsum.photos/seed/${result.id}/300/220`,
+        },
+      ]);
     }
-    setLocalList((prev) => [...prev, newItem]);
   };
 
   const closeSearch = () => {
@@ -360,6 +372,8 @@ export default function LibraryDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <FloatingContactButton bottomOffset={BOTTOM_BAR_H} />
 
       {/* ── 하단 탭 바 ── */}
       <View style={s.tabBar}>

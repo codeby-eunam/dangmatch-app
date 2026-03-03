@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
-const API_BASE = 'http://192.168.137.1:3000';
+const API_BASE = 'https://dangmatch-git-develop-meow92070-8568s-projects.vercel.app';
 const AUTO_RADIUS = 3000; // 3km 고정
 const SWIPE_THRESHOLD = 16; // 초과 시 스와이프, 이하 시 토너먼트
 
@@ -138,6 +139,8 @@ export default function ModeSelectScreen() {
           </>
         )}
       </View>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }

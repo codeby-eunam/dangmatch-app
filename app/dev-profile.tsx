@@ -113,7 +113,7 @@ export default function DevProfileScreen() {
             <View style={s.earlyMemberInfo}>
               <Text style={s.earlyMemberTitle}>초기멤버 뱃지</Text>
               <Text style={s.earlyMemberDesc}>
-                당매치 초기 1,000명 안에 가입한 특별한 멤버예요!{'\n'}
+                당맷치 초기 1,000명 안에 가입한 특별한 멤버예요!{'\n'}
                 가입 순번 #{user.joinOrder}
               </Text>
             </View>

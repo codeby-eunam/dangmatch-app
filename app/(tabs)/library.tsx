@@ -18,7 +18,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLibrary, type Place, type ListItem } from '@/context/LibraryContext';
-import { useUser } from '@/context/UserContext';
+import { useUser, setLoginReturnTo } from '@/context/UserContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;
@@ -26,12 +27,12 @@ const CARD_GAP = 12;
 const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const IMG_SIZE = CARD_W / 2;
 
-const BASE_URL = 'http://192.168.137.1:3000';
+const BASE_URL = 'https://dangmatch-m5moq6aho-meow92070-8568s-projects.vercel.app';
 
 
 export default function LibraryScreen() {
   const router = useRouter();
-  const { lists, addList, deleteList, renameList, togglePublic } = useLibrary();
+  const { lists, listsLoading, addList, deleteList, renameList, togglePublic } = useLibrary();
   const { isLoggedIn, loginWithKakao } = useUser();
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -43,6 +44,7 @@ export default function LibraryScreen() {
   const [selectedPlaces, setSelectedPlaces] = useState<Place[]>([]);
   const [searchResults, setSearchResults] = useState<Place[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── 카드 옵션 시트 ──
@@ -57,10 +59,18 @@ export default function LibraryScreen() {
 
   // ── 카카오 로그인 핸들러 ──
   const handleKakaoLogin = async () => {
+    setLoginReturnTo('library');
     setLoginLoading(true);
     try {
-      const needsSetup = await loginWithKakao();
-      if (needsSetup) router.push('/setup-profile');
+      const result = await loginWithKakao();
+      if (result === null) return; // Android: auth/callback.tsx가 처리
+      if (result.needsSetup) {
+        router.push({
+          pathname: '/setup-profile',
+          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+        });
+      }
+      // iOS 기존 유저: isLoggedIn → 컴포넌트 재렌더링 → 보관함 화면 표시
     } catch {
       Alert.alert('오류', '로그인에 실패했습니다. 다시 시도해주세요.');
     } finally {
@@ -109,20 +119,21 @@ export default function LibraryScreen() {
         const res = await fetch(
           `${BASE_URL}/api/kakao/search-location?query=${encodeURIComponent(query)}`
         );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const docs: any[] = json.documents ?? [];
         setSearchResults(
           docs.map((d) => ({
             id: d.id,
             name: d.place_name,
-            category: (d.category_name as string).includes('카페') ? '카페' as const : '식당' as const,
-            categoryName: (d.category_name as string).split(' > ').pop() ?? d.category_name,
+            category: (d.category_name ?? '').includes('카페') ? '카페' as const : '식당' as const,
+            categoryName: (d.category_name ?? '').split(' > ').pop() || d.category_name || '기타',
             address: d.road_address_name || d.address_name || '',
             image: `https://picsum.photos/seed/${d.id}/200/200`,
             placeUrl: d.place_url ?? '',
           }))
         );
-      } catch { setSearchResults([]); }
+      } catch (err) { console.error('[Library Search]', err); setSearchResults([]); }
       finally { setIsSearching(false); }
     }, 400);
   };
@@ -141,17 +152,18 @@ export default function LibraryScreen() {
   const closeModal = () => setModalVisible(false);
   const goToStep2 = () => { if (newListName.trim()) setStep(2); };
 
-  const createList = () => {
-    if (selectedPlaces.length === 0) return;
-    const cafeCount = selectedPlaces.filter((p) => p.category === '카페').length;
-    const type: '식당' | '카페' = cafeCount > selectedPlaces.length / 2 ? '카페' : '식당';
-    const icon = type === '카페' ? 'local-cafe' : 'restaurant';
-    const rawImages = selectedPlaces.slice(0, 4).map((p) => p.image);
-    const fallback = rawImages[0] ?? 'https://picsum.photos/seed/default/200/200';
-    const images = [...rawImages];
-    while (images.length < 4) images.push(fallback);
-    addList({ id: Date.now().toString(), title: newListName.trim(), count: selectedPlaces.length, type, icon, images, places: selectedPlaces, isPublic: false });
-    closeModal();
+  const createList = async () => {
+    if (selectedPlaces.length === 0 || isCreating) return;
+    setIsCreating(true);
+    try {
+      await addList(newListName.trim(), selectedPlaces);
+      closeModal();
+    } catch (err) {
+      console.error('[Library] 리스트 생성 실패:', err);
+      Alert.alert('오류', '리스트 생성에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   /* ───────── 카드 옵션 ───────── */
@@ -192,14 +204,18 @@ export default function LibraryScreen() {
           <Text style={s.subtitle}>당신만을 위한 맛있는 기록들</Text>
         </View>
 
-        {/* Empty State */}
-        {lists.length === 0 && (
+        {/* Empty / Loading State */}
+        {listsLoading ? (
+          <View style={s.emptyState}>
+            <ActivityIndicator size="large" color="#FF6B35" />
+          </View>
+        ) : lists.length === 0 ? (
           <View style={s.emptyState}>
             <Text style={s.emptyEmoji}>📂</Text>
             <Text style={s.emptyTitle}>아직 리스트가 없어요</Text>
             <Text style={s.emptyDesc}>아래 버튼을 눌러{'\n'}첫 번째 리스트를 만들어보세요!</Text>
           </View>
-        )}
+        ) : null}
 
         {/* Card Grid */}
         <View style={s.grid}>
@@ -380,13 +396,17 @@ export default function LibraryScreen() {
 
                 <View style={s.createBtnWrap}>
                   <TouchableOpacity
-                    style={[s.createBtn, selectedPlaces.length === 0 && s.btnDisabled]}
+                    style={[s.createBtn, (selectedPlaces.length === 0 || isCreating) && s.btnDisabled]}
                     onPress={createList}
-                    disabled={selectedPlaces.length === 0}
+                    disabled={selectedPlaces.length === 0 || isCreating}
                   >
-                    <Text style={s.createBtnTxt}>
-                      {selectedPlaces.length > 0 ? `리스트 만들기 (${selectedPlaces.length}개)` : '가게를 선택해주세요'}
-                    </Text>
+                    {isCreating ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={s.createBtnTxt}>
+                        {selectedPlaces.length > 0 ? `리스트 만들기 (${selectedPlaces.length}개)` : '가게를 선택해주세요'}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </>
@@ -455,6 +475,8 @@ export default function LibraryScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }

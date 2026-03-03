@@ -1,10 +1,19 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as ExpoLinking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = 'http://192.168.137.1:3000';
+// 로그인 후 돌아갈 목적지 (null = landing에서 로그인 → mode-select)
+let _loginReturnTo: 'library' | 'profile' | null = null;
+export function setLoginReturnTo(dest: 'library' | 'profile' | null) {
+  _loginReturnTo = dest;
+}
+export function getLoginReturnTo() {
+  return _loginReturnTo;
+}
+
+// const API_BASE = 'http://192.168.200.102:3000';
+const API_BASE = 'https://dangmatch-git-develop-meow92070-8568s-projects.vercel.app';
 const USER_STORAGE_KEY = '@dangmatch_user';
 
 export type Badge = '초기멤버';
@@ -25,14 +34,20 @@ interface PendingKakaoLogin {
   profileImage?: string;
 }
 
+export type OAuthResult =
+  | { needsSetup: true; kakaoId: string; profileImage?: string }
+  | { needsSetup: false; kakaoId: string };
+
 interface UserContextValue {
   user: User | null;
   isLoggedIn: boolean;
   hasSeenLanding: boolean;
   setHasSeenLanding: () => void;
   pendingKakaoLogin: PendingKakaoLogin | null;
-  loginWithKakao: () => Promise<boolean>; // true = 신규 유저, 프로필 설정 필요
-  setupProfile: (userId: string, nickname: string) => Promise<void>;
+  loginWithKakao: () => Promise<OAuthResult | null>;
+  processOAuthParams: (params: Record<string, string | undefined>) => OAuthResult;
+  setupProfile: (userId: string, nickname: string, kakaoId: string, profileImage?: string) => Promise<void>;
+  updateNickname: (nickname: string) => Promise<void>;
   logout: () => void;
   checkUserIdAvailable: (userId: string) => Promise<boolean>;
 }
@@ -50,7 +65,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       if (json) {
         try {
           setUser(JSON.parse(json));
-          setHasSeenLandingState(true); // 이미 로그인한 유저는 랜딩 스킵
+          setHasSeenLandingState(true);
         } catch {
           AsyncStorage.removeItem(USER_STORAGE_KEY);
         }
@@ -70,113 +85,75 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setHasSeenLanding = useCallback(() => setHasSeenLandingState(true), []);
 
   /**
-   * 카카오 OAuth 로그인 (expo-web-browser)
-   * 앱 scheme: app.json > "scheme": "dangmatchapp"
-   * 백엔드 /api/auth/kakao 가 OAuth 처리 후 dangmatchapp://auth/callback?... 으로 리다이렉트
-   *
-   * 반환값:
-   *   true  = 신규 유저 (프로필 설정 화면으로 이동 필요)
-   *   false = 기존 유저 (바로 메인으로 이동)
+   * OAuth 콜백 파라미터 처리 (iOS openAuthSessionAsync + Android auth/callback.tsx 공유)
    */
-  const loginWithKakao = useCallback((): Promise<boolean> => {
-    return new Promise<boolean>((resolve, reject) => {
-      let handled = false;
+  const processOAuthParams = useCallback(
+    (params: Record<string, string | undefined>): OAuthResult => {
+      const error = params.error;
+      if (error) throw new Error(`[백엔드] ${decodeURIComponent(error)}`);
 
-      // 환경(Expo Go / 빌드앱)에 맞는 redirect URI 자동 생성
-      // Expo Go:  exp://192.168.x.x:8081/--/auth/callback
-      // 빌드앱:   dangmatch://auth/callback
-      const redirectUri = ExpoLinking.createURL('auth/callback');
+      const kakaoId = params.kakaoId ?? '';
+      const isNewUser = params.isNewUser === 'true';
+      const nickname = params.nickname ?? '';
+      const profileImage = params.profileImage || undefined;
+      const userId = params.userId;
+      const joinOrder = parseInt(params.joinOrder ?? '9999', 10);
+      const badgesParam = params.badges ?? '';
 
-      // 콜백 URL 파싱 및 유저 상태 설정
-      const processUrl = (url: string): boolean => {
-        if (!url.startsWith(redirectUri)) return false;
-        if (handled) return true;
-        handled = true;
+      const badges: Badge[] = [];
+      if (badgesParam.includes('초기멤버') || joinOrder <= 1000) {
+        badges.push('초기멤버');
+      }
 
-        const queryString = url.includes('?') ? url.split('?')[1] : '';
-        const params = new URLSearchParams(queryString);
+      if (isNewUser || !userId) {
+        setPendingKakaoLogin({ kakaoId, nickname, profileImage });
+        return { needsSetup: true, kakaoId, profileImage };
+      } else {
+        setUser({
+          kakaoId,
+          userId,
+          nickname,
+          profileImage,
+          joinOrder,
+          badges,
+          createdAt: params.createdAt ?? new Date().toISOString(),
+        });
+        return { needsSetup: false, kakaoId };
+      }
+    },
+    []
+  );
 
-        const backendError = params.get('error');
-        if (backendError) {
-          reject(new Error(`[백엔드] ${decodeURIComponent(backendError)}`));
-          return true;
-        }
+  /**
+   * 카카오 OAuth 로그인
+   * - iOS: openAuthSessionAsync가 URL 캡처 → null이 아닌 결과 반환
+   * - Android/Expo Go: Expo Router가 URL 처리 → auth/callback.tsx가 담당 → null 반환
+   */
+  const loginWithKakao = useCallback(async (): Promise<OAuthResult | null> => {
+    const redirectUri = ExpoLinking.createURL('auth/callback');
+    console.log('🔵 redirectUri =', redirectUri);
 
-        const kakaoId = params.get('kakaoId') ?? '';
-        const isNewUser = params.get('isNewUser') === 'true';
-        const nickname = params.get('nickname') ?? '';
-        const profileImage = params.get('profileImage') ?? undefined;
-        const userId = params.get('userId');
-        const joinOrder = parseInt(params.get('joinOrder') ?? '9999', 10);
-        const badgesParam = params.get('badges') ?? '';
-        const badges: Badge[] = [];
-        if (badgesParam.includes('초기멤버') || joinOrder <= 1000) {
-          badges.push('초기멤버');
-        }
+    const result = await WebBrowser.openAuthSessionAsync(
+      `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`,
+      redirectUri
+    );
 
-        if (isNewUser || !userId) {
-          setPendingKakaoLogin({ kakaoId, nickname, profileImage });
-          resolve(true);
-        } else {
-          setUser({
-            kakaoId,
-            userId,
-            nickname,
-            profileImage,
-            joinOrder,
-            badges,
-            createdAt: params.get('createdAt') ?? new Date().toISOString(),
-          });
-          resolve(false);
-        }
-        return true;
-      };
+    if (result.type === 'success' && result.url) {
+      // iOS: openAuthSessionAsync가 URL을 직접 캡처
+      const queryString = result.url.includes('?') ? result.url.split('?')[1] : '';
+      const params = Object.fromEntries(new URLSearchParams(queryString));
+      return processOAuthParams(params);
+    }
 
-      // Android: Chrome Custom Tab이 커스텀 스킴으로 리다이렉트 시
-      // type=dismiss 로 끝나지만 OS가 Linking 이벤트로 URL을 전달함
-      const subscription = Linking.addEventListener('url', ({ url }) => {
-        if (processUrl(url)) subscription.remove();
-      });
-
-      WebBrowser.openAuthSessionAsync(
-        `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`,
-        redirectUri
-      ).then((result) => {
-        if (handled) return;
-
-        if (result.type === 'success') {
-          // iOS: URL이 직접 반환됨
-          subscription.remove();
-          processUrl(result.url);
-        } else {
-          // Android: dismiss 후 Linking 이벤트가 뒤따라 올 수 있으므로 잠시 대기
-          setTimeout(() => {
-            if (!handled) {
-              handled = true;
-              subscription.remove();
-              reject(new Error(`[브라우저] type=${result.type}`));
-            }
-          }, 1000);
-        }
-      }).catch((err) => {
-        if (!handled) {
-          handled = true;
-          subscription.remove();
-          reject(err);
-        }
-      });
-    });
-  }, []);
+    // Android/Expo Go: auth/callback.tsx 가 처리
+    return null;
+  }, [processOAuthParams]);
 
   /**
    * 신규 유저 프로필 설정
-   * 카카오 로그인 후 @아이디 + 닉네임 설정
    */
   const setupProfile = useCallback(
-    async (userId: string, nickname: string) => {
-      const kakaoId = pendingKakaoLogin?.kakaoId ?? '';
-      const profileImage = pendingKakaoLogin?.profileImage;
-
+    async (userId: string, nickname: string, kakaoId: string, profileImage?: string) => {
       const res = await fetch(`${API_BASE}/api/auth/setup-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,8 +161,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `서버 오류 (${res.status})`);
+        let errMsg = `서버 오류 (${res.status})`;
+        try {
+          const data = await res.json();
+          if (typeof data.error === 'string') errMsg = data.error;
+          else if (typeof data.message === 'string') errMsg = data.message;
+          else errMsg = `서버 오류 (${res.status}): ${JSON.stringify(data)}`;
+        } catch {}
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -203,8 +186,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       });
       setPendingKakaoLogin(null);
     },
-    [pendingKakaoLogin]
+    []
   );
+
+  /** 닉네임 변경 */
+  const updateNickname = useCallback(async (nickname: string) => {
+    if (!user) throw new Error('로그인이 필요합니다.');
+    const res = await fetch(`${API_BASE}/api/auth/update-profile`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kakaoId: user.kakaoId, nickname }),
+    });
+    if (!res.ok) {
+      let errMsg = `서버 오류 (${res.status})`;
+      try {
+        const data = await res.json();
+        if (typeof data.error === 'string') errMsg = data.error;
+      } catch {}
+      throw new Error(errMsg);
+    }
+    setUser((prev) => prev ? { ...prev, nickname } : prev);
+  }, [user]);
 
   /** 아이디 중복 확인 */
   const checkUserIdAvailable = useCallback(async (userId: string): Promise<boolean> => {
@@ -215,7 +217,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       return data.available === true;
     } catch {
-      return true; // 서버 오류 시 사용 가능으로 처리
+      return true;
     }
   }, []);
 
@@ -232,7 +234,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         setHasSeenLanding,
         pendingKakaoLogin,
         loginWithKakao,
+        processOAuthParams,
         setupProfile,
+        updateNickname,
         logout,
         checkUserIdAvailable,
       }}

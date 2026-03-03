@@ -15,10 +15,15 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Redirect, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 import { useUser } from '@/context/UserContext';
+// ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
+import { logFilterSelected, logLocationSearched } from '@/lib/analytics';
+// ─────────────────────────────────────────────────────────────────────────
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,18 +38,9 @@ const FOOD_FILTERS = [
   { id: 'cafe',     label: '카페',   emoji: '☕' },
 ];
 
-const API_BASE = 'http://192.168.137.1:3000';
+const API_BASE = 'https://dangmatch-git-develop-meow92070-8568s-projects.vercel.app';
 
-const SUGGESTED_LOCATIONS = [
-  '중앙대학교 근처',
-  '서울역 근처',
-  '홍대입구역 근처',
-  '강남역 근처',
-  '신촌역 근처',
-  '이태원 근처',
-  '종로 근처',
-  '명동 근처',
-];
+const RECENT_KEY = 'recentLocationSearches';
 
 type KakaoPlace = {
   place_name: string;
@@ -56,12 +52,9 @@ type KakaoPlace = {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { hasSeenLanding } = useUser();
+  const { hasSeenLanding, isLoggedIn } = useUser();
 
-  if (!hasSeenLanding) {
-    return <Redirect href="/landing" />;
-  }
-  const [location, setLocation] = useState('중앙대학교 근처');
+  const [location, setLocation] = useState('서울역');
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -70,7 +63,14 @@ export default function HomeScreen() {
   const [startLoading, setStartLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<KakaoPlace[]>([]);
   const [searching, setSearching] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_KEY).then((val) => {
+      if (val) setRecentSearches(JSON.parse(val));
+    });
+  }, []);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -96,6 +96,10 @@ export default function HomeScreen() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [searchText]);
+
+  if (!hasSeenLanding && !isLoggedIn) {
+    return <Redirect href="/landing" />;
+  }
 
   // 현재 위치 가져오기 (expo-location)
   const handleCurrentLocation = async () => {
@@ -137,7 +141,18 @@ export default function HomeScreen() {
     } else {
       setLocationCoords(null);
     }
+    const updated = [name, ...recentSearches.filter((s) => s !== name)].slice(0, 7);
+    setRecentSearches(updated);
+    AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+    // ── [Firebase Analytics] ───────────────────────────────────────────
+    logLocationSearched(searchText || name, searchResults.length, name);
+    // ────────────────────────────────────────────────────────────────────
     closeModal();
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    AsyncStorage.removeItem(RECENT_KEY);
   };
 
   const handleStart = async () => {
@@ -236,6 +251,9 @@ export default function HomeScreen() {
                 onPress={() => {
                   if (f.id === 'all') {
                     setSelectedFilters(['all']);
+                    // ── [Firebase Analytics] ────────────────────────────
+                    logFilterSelected(['all'], location);
+                    // ────────────────────────────────────────────────────
                   } else {
                     setSelectedFilters((prev) => {
                       const without = prev.filter((id) => id !== 'all');
@@ -243,7 +261,11 @@ export default function HomeScreen() {
                       const next = exists
                         ? without.filter((id) => id !== f.id)
                         : [...without, f.id];
-                      return next.length === 0 ? ['all'] : next;
+                      const result = next.length === 0 ? ['all'] : next;
+                      // ── [Firebase Analytics] ──────────────────────────
+                      logFilterSelected(result, location);
+                      // ────────────────────────────────────────────────────
+                      return result;
                     });
                   }
                 }}
@@ -274,6 +296,8 @@ export default function HomeScreen() {
         {/* ─── 서브타이틀 ─── */}
         <Text style={styles.subtitle}>고민하지 말고, 맛있게!</Text>
       </ScrollView>
+
+      <FloatingContactButton />
 
       {/* ════════════════════════════════
           위치 검색 모달
@@ -366,18 +390,28 @@ export default function HomeScreen() {
               />
             ) : (
               <FlatList
-                data={SUGGESTED_LOCATIONS}
+                data={recentSearches}
                 keyExtractor={(item) => item}
                 keyboardShouldPersistTaps="handled"
                 ListHeaderComponent={
-                  <Text style={styles.listSectionHeader}>추천 위치</Text>
+                  <View style={styles.recentHeader}>
+                    <Text style={styles.listSectionHeader}>최근 검색</Text>
+                    {recentSearches.length > 0 && (
+                      <TouchableOpacity onPress={clearRecentSearches}>
+                        <Text style={styles.clearText}>전체 삭제</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                }
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>최근 검색 기록이 없습니다.</Text>
                 }
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.locationItem}
                     onPress={() => selectLocation(item)}
                   >
-                    <IconSymbol name="location.fill" size={16} color="#9CA3AF" />
+                    <IconSymbol name="clock" size={16} color="#9CA3AF" />
                     <Text style={styles.locationItemText}>{item}</Text>
                   </TouchableOpacity>
                 )}
@@ -592,6 +626,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 2,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  clearText: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   emptyText: {
     textAlign: 'center',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Alert,
   Modal,
@@ -14,6 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useLibrary, type Place } from '@/context/LibraryContext';
+// ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
+import { logCardViewed, logRestaurantSelected } from '@/lib/analytics';
+// ─────────────────────────────────────────────────────────────────────────
 
 const BG_TEAL = '#1E7874';
 const ORANGE = '#F57C4A';
@@ -62,6 +65,11 @@ export default function SwipeScreen() {
   const [liked, setLiked] = useState<Restaurant[]>([]);
   const [done, setDone] = useState(false);
 
+  // ── [Firebase Analytics] 카드 체류 시간 측정 ────────────────────────────
+  const viewStartRef = useRef(Date.now());
+  useEffect(() => { viewStartRef.current = Date.now(); }, [index]);
+  // ────────────────────────────────────────────────────────────────────────
+
   // 보관함 모달 상태
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [saveMode, setSaveMode] = useState<'select' | 'new'>('select');
@@ -71,6 +79,12 @@ export default function SwipeScreen() {
   const progress = restaurants.length > 0 ? (index + 1) / restaurants.length : 0;
 
   const advance = (like: boolean) => {
+    // ── [Firebase Analytics] 카드 체류 시간 기록 ────────────────────────
+    const dwellMs = Date.now() - viewStartRef.current;
+    const catShort = current.category_name?.split(' > ').pop() ?? '기타';
+    logCardViewed(current.id, current.place_name, catShort, locationName ?? '', dwellMs);
+    // ────────────────────────────────────────────────────────────────────
+
     const next = [...liked, ...(like ? [current] : [])];
     if (index + 1 >= restaurants.length) {
       setLiked(next);
@@ -83,9 +97,13 @@ export default function SwipeScreen() {
 
   const goToResult = (likedList: Restaurant[]) => {
     if (likedList.length === 1) {
+      // ── [Firebase Analytics] ───────────────────────────────────────────
+      const r = likedList[0];
+      logRestaurantSelected(r.id, r.place_name, r.category_name?.split(' > ').pop() ?? '기타', 'swipe', locationName ?? '');
+      // ────────────────────────────────────────────────────────────────────
       router.push({
         pathname: '/result' as any,
-        params: { restaurant: JSON.stringify(likedList[0]) },
+        params: { restaurant: JSON.stringify(r) },
       });
     } else if (likedList.length >= 2) {
       router.push({

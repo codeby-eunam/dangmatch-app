@@ -12,12 +12,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useUser } from '@/context/UserContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, updateNickname } = useUser();
 
   const [nickname, setNickname] = useState(user?.nickname ?? '');
   const [saving, setSaving] = useState(false);
@@ -31,13 +32,12 @@ export default function EditProfileScreen() {
     if (!isReady) return;
     setSaving(true);
     try {
-      // TODO: PATCH /api/auth/profile { kakaoId, nickname }
-      await new Promise((res) => setTimeout(res, 600)); // 임시 딜레이
+      await updateNickname(nickname.trim());
       Alert.alert('저장 완료', '닉네임이 변경되었어요.', [
         { text: '확인', onPress: () => router.back() },
       ]);
-    } catch {
-      Alert.alert('오류', '저장에 실패했어요. 다시 시도해주세요.');
+    } catch (err) {
+      Alert.alert('오류', err instanceof Error ? err.message : '저장에 실패했어요. 다시 시도해주세요.');
     } finally {
       setSaving(false);
     }
@@ -131,6 +131,8 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }
