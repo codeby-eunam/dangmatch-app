@@ -46,6 +46,10 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('로그아웃 하시겠어요?')) logout();
+      return;
+    }
     Alert.alert('로그아웃', '로그아웃 하시겠어요?', [
       { text: '취소', style: 'cancel' },
       { text: '로그아웃', style: 'destructive', onPress: logout },
