@@ -98,14 +98,6 @@ export default function LandingScreen() {
           <Text style={s.skipBtnText}>로그인 없이 시작하기</Text>
         </TouchableOpacity>
 
-        {/* 임시: 마이페이지 UI 확인 */}
-        <TouchableOpacity
-          style={s.devBtn}
-          onPress={() => router.push('/dev-profile')}
-          activeOpacity={0.7}
-        >
-          <Text style={s.devBtnText}>🛠 마이페이지 확인 (임시)</Text>
-        </TouchableOpacity>
       </View>
 
       <Text style={s.footerNote}>
@@ -234,21 +226,5 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     lineHeight: 18,
-  },
-
-  /* 임시 개발용 버튼 */
-  devBtn: {
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#1E7874',
-    backgroundColor: 'transparent',
-  },
-  devBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E7874',
   },
 });
