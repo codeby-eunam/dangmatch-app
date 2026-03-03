@@ -13,7 +13,7 @@ export function getLoginReturnTo() {
 }
 
 // const API_BASE = 'http://192.168.200.102:3000';
-const API_BASE = 'https://dangmatch-git-develop-meow92070-8568s-projects.vercel.app';
+const API_BASE = 'https://dangmatch-y7al-meow92070-8568s-projects.vercel.app';
 const USER_STORAGE_KEY = '@dangmatch_user';
 
 export type Badge = '초기멤버';
