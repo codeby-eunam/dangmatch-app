@@ -129,25 +129,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
    * - iOS: openAuthSessionAsync가 URL 캡처 → null이 아닌 결과 반환
    * - Android/Expo Go: Expo Router가 URL 처리 → auth/callback.tsx가 담당 → null 반환
    */
-  const loginWithKakao = useCallback(async (): Promise<OAuthResult | null> => {
-    const redirectUri = ExpoLinking.createURL('auth/callback');
-    console.log('🔵 redirectUri =', redirectUri);
+	const loginWithKakao = useCallback(async (): Promise<OAuthResult | null> => {
+		const redirectUri = ExpoLinking.createURL('auth/callback');
+		console.log('🔵 redirectUri =', redirectUri);
 
-    const result = await WebBrowser.openAuthSessionAsync(
-      `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`,
-      redirectUri
-    );
+		const result = await WebBrowser.openAuthSessionAsync(
+			`${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`,
+			redirectUri
+		);
 
-    if (result.type === 'success' && result.url) {
-      // iOS: openAuthSessionAsync가 URL을 직접 캡처
-      const queryString = result.url.includes('?') ? result.url.split('?')[1] : '';
-      const params = Object.fromEntries(new URLSearchParams(queryString));
-      return processOAuthParams(params);
-    }
+		// ← 이 로그 추가
+		console.log('🟢 openAuthSession result =', JSON.stringify(result));
 
-    // Android/Expo Go: auth/callback.tsx 가 처리
-    return null;
-  }, [processOAuthParams]);
+		if (result.type === 'success' && result.url) {
+			const queryString = result.url.includes('?') ? result.url.split('?')[1] : '';
+			const params = Object.fromEntries(new URLSearchParams(queryString));
+			return processOAuthParams(params);
+		}
+
+		return null;
+	}, [processOAuthParams]);
 
   /**
    * 신규 유저 프로필 설정
