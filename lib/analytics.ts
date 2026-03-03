@@ -115,7 +115,7 @@ async function logEvent(
   try {
     await addDoc(collection(db, 'events'), {
       event,
-      userId: userId ?? null,
+      userId: userId ?? undefined,
       ...payload,
       timestamp: serverTimestamp(),
     } satisfies BaseEvent & EventPayload);

@@ -129,23 +129,7 @@ export default function SwipeScreen() {
     const name = newListName.trim();
     if (!name) return;
     const places = liked.map(toPlace);
-    const cafeCount = places.filter((p) => p.category === '카페').length;
-    const type: '식당' | '카페' = cafeCount > places.length / 2 ? '카페' : '식당';
-    const icon = type === '카페' ? 'local-cafe' : 'restaurant';
-    const rawImages = places.slice(0, 4).map((p) => p.image);
-    const fallback = rawImages[0] ?? 'https://picsum.photos/seed/default/200/200';
-    const images = [...rawImages];
-    while (images.length < 4) images.push(fallback);
-    addList({
-      id: Date.now().toString(),
-      title: name,
-      count: places.length,
-      type,
-      icon,
-      images,
-      places,
-      isPublic: false,
-    });
+    addList(name, places);
     setSaveModalVisible(false);
     Alert.alert('보관함 생성 완료', `"${name}" 보관함이 만들어졌어요!`);
   };
