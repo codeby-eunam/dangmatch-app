@@ -38,7 +38,7 @@ const FOOD_FILTERS = [
   { id: 'cafe',     label: '카페',   emoji: '☕' },
 ];
 
-const API_BASE = 'https://dangmatch-git-develop-meow92070-8568s-projects.vercel.app';
+const API_BASE = 'https://dangmatch-y7al-meow92070-8568s-projects.vercel.app';
 
 const RECENT_KEY = 'recentLocationSearches';
 
