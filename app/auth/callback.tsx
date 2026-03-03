@@ -15,10 +15,33 @@ export default function AuthCallbackScreen() {
   const params = useLocalSearchParams<Record<string, string>>();
 
   useEffect(() => {
-    // 웹(팝업)에서는 openAuthSessionAsync가 URL을 감지해 메인 창에서 처리
-    // auth/callback.tsx가 navigate하면 URL이 바뀌어서 감지 실패하므로 여기서는 아무것도 안 함
-    if (Platform.OS === 'web') return;
+    // 웹: 현재 창이 /auth/callback으로 리다이렉트된 경우 → 여기서 직접 처리
+    if (Platform.OS === 'web') {
+      try {
+        // params가 비어있으면 아직 로딩 중
+        if (!params.kakaoId && !params.error) return;
 
+        if (params.error) {
+          router.replace('/landing');
+          return;
+        }
+
+        const result = processOAuthParams(params);
+        if (result.needsSetup) {
+          router.replace({
+            pathname: '/setup-profile',
+            params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+          });
+        } else {
+          router.replace('/(tabs)');
+        }
+      } catch {
+        router.replace('/landing');
+      }
+      return;
+    }
+
+    // Android/Expo Go: 딥링크로 이 화면에 도달한 경우
     try {
       const result = processOAuthParams(params);
       if (result.needsSetup) {
@@ -50,7 +73,6 @@ export default function AuthCallbackScreen() {
           })
         );
       } else {
-        // landing에서 로그인 → 홈 탭
         navigation.dispatch(
           CommonActions.reset({ index: 0, routes: [{ name: '(tabs)' }] })
         );
@@ -58,7 +80,7 @@ export default function AuthCallbackScreen() {
     } catch {
       router.replace('/landing');
     }
-  }, []);
+  }, [params.kakaoId, params.error]); // ← params 변경 감지
 
   return (
     <View style={styles.container}>
