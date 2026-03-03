@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,8 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useUser } from '@/context/UserContext';
+import { useUser, setLoginReturnTo } from '@/context/UserContext';
 import { useLibrary } from '@/context/LibraryContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
+
+const BADGE_EARLY = require('@/assets/images/badge-early-member.png');
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -23,11 +27,16 @@ export default function ProfileScreen() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const handleKakaoLogin = async () => {
+    setLoginReturnTo('profile');
     setLoginLoading(true);
     try {
-      const needsSetup = await loginWithKakao();
-      if (needsSetup) {
-        router.push('/setup-profile');
+      const result = await loginWithKakao();
+      if (result === null) return; // Android: auth/callback.tsx 가 처리
+      if (result.needsSetup) {
+        router.push({
+          pathname: '/setup-profile',
+          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+        });
       }
     } catch (err) {
       Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
@@ -103,7 +112,7 @@ export default function ProfileScreen() {
                     style={[s.badge, badge === '초기멤버' && s.badgeEarly]}
                   >
                     {badge === '초기멤버' && (
-                      <Text style={s.badgeIcon}>⭐</Text>
+                      <Image source={BADGE_EARLY} style={s.badgeIcon} />
                     )}
                     <Text
                       style={[s.badgeText, badge === '초기멤버' && s.badgeEarlyText]}
@@ -137,11 +146,11 @@ export default function ProfileScreen() {
             style={s.earlyMemberCard}
             onLayout={(e) => setBadgeCardY(e.nativeEvent.layout.y)}
           >
-            <Text style={s.earlyMemberEmoji}>⭐</Text>
+            <Image source={BADGE_EARLY} style={s.earlyMemberEmoji} />
             <View style={s.earlyMemberInfo}>
               <Text style={s.earlyMemberTitle}>초기멤버 뱃지</Text>
               <Text style={s.earlyMemberDesc}>
-                당매치 초기 1,000명 안에 가입한 특별한 멤버예요!{'\n'}
+                당맷치 초기 1,000명 안에 가입한 특별한 멤버예요!{'\n'}
                 가입 순번 #{user!.joinOrder}
               </Text>
             </View>
@@ -153,12 +162,16 @@ export default function ProfileScreen() {
           <Text style={s.sectionTitle}>설정</Text>
           <View style={s.menuCard}>
             <MenuItem label="프로필 수정" icon="✏️" onPress={() => router.push('/edit-profile')} />
+            {/* 알림 설정 — 푸시 알림 인프라 미구축, 추후 업데이트 예정
             <MenuDivider />
             <MenuItem label="알림 설정" icon="🔔" onPress={() => router.push('/notification-settings')} />
+            */}
+            {/* 개인정보 처리방침 / 이용약관 — 사업자 등록 후 내용 확정 예정, 추후 업데이트 예정
             <MenuDivider />
             <MenuItem label="개인정보 처리방침" icon="📄" onPress={() => {}} />
             <MenuDivider />
             <MenuItem label="이용약관" icon="📋" onPress={() => {}} />
+            */}
           </View>
         </View>
 
@@ -173,6 +186,8 @@ export default function ProfileScreen() {
           가입일: {new Date(user!.createdAt).toLocaleDateString('ko-KR')}
         </Text>
       </ScrollView>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }
@@ -288,7 +303,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F59E0B',
   },
-  badgeIcon: { fontSize: 11 },
+  badgeIcon: { width: 16, height: 16 },
   badgeText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
   badgeEarlyText: { color: '#D97706' },
 
@@ -319,7 +334,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FCD34D',
   },
-  earlyMemberEmoji: { fontSize: 40 },
+  earlyMemberEmoji: { width: 64, height: 64 },
   earlyMemberInfo: { flex: 1, gap: 4 },
   earlyMemberTitle: { fontSize: 16, fontWeight: '700', color: '#D97706' },
   earlyMemberDesc: { fontSize: 13, color: '#92400E', lineHeight: 20 },

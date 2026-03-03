@@ -79,11 +79,14 @@ export default function TournamentScreen() {
   const [round, setRound] = useState(1);
   const [selectedSide, setSelectedSide] = useState<'left' | 'right' | null>(null);
   const [history, setHistory] = useState<MatchSnapshot[]>([]);
-  const [webViewUrl, setWebViewUrl] = useState<string | null>(null);
 
   const totalMatches = Math.floor(bracket.length / 2);
   const left = bracket[matchIdx * 2];
   const right = bracket[matchIdx * 2 + 1];
+
+  // 선택된 카드에 따라 WebView URL 결정
+  const activeRestaurant = selectedSide === 'left' ? left : selectedSide === 'right' ? right : null;
+  const activeWebUrl = activeRestaurant?.place_url ?? null;
 
   const getRoundName = () => {
     const total = bracket.length;
@@ -134,7 +137,6 @@ export default function TournamentScreen() {
       setRoundWinners(next);
     }
     setSelectedSide(null);
-    setWebViewUrl(null);
   };
 
   const handleConfirm = () => {
@@ -144,7 +146,6 @@ export default function TournamentScreen() {
   };
 
   const handleGoBack = () => {
-    setWebViewUrl(null);
     if (history.length > 0) {
       const prev = history[history.length - 1];
       setHistory((h) => h.slice(0, -1));
@@ -155,6 +156,16 @@ export default function TournamentScreen() {
       setSelectedSide(null);
     } else {
       router.back();
+    }
+  };
+
+  // 오늘의 픽: 선택한 가게로 바로 결과 이동 (토너먼트 스킵)
+  const handleTodayPick = () => {
+    if (activeRestaurant) {
+      router.push({
+        pathname: '/result' as any,
+        params: { restaurant: JSON.stringify(activeRestaurant) },
+      });
     }
   };
 
@@ -179,90 +190,21 @@ export default function TournamentScreen() {
         />
       </View>
 
-      {/* 콘텐츠 (카드 + WebView 패널이 같은 영역에 겹침) */}
-      <View style={styles.content}>
-        <Text style={styles.question}>세상에서 제일 힘든 선택이지? 딱 하나만 골라.</Text>
+      {/* 질문 */}
+      <Text style={styles.question}>세상에서 제일 힘든 선택이지? 하나만 골라.</Text>
 
-        <View style={styles.matchup}>
-          {/* 왼쪽 카드 (주황) */}
-          {left ? (
-            <TouchableOpacity
-              style={[styles.restaurantCard, styles.leftCard, selectedSide === 'left' && styles.selectedCard]}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (selectedSide === 'left') {
-                  if (left.place_url) setWebViewUrl(left.place_url);
-                } else {
-                  setSelectedSide('left');
-                }
-              }}
-            >
-              <Text style={styles.cardEmoji}>{getCategoryEmoji(left.category_name)}</Text>
-              <Text style={styles.cardCategory}>{getCategoryLabel(left.category_name)}</Text>
-              <Text style={styles.cardName}>{left.place_name}</Text>
-              <Text style={styles.cardAddress} numberOfLines={2}>
-                {left.road_address_name || left.address_name}
-              </Text>
-              {selectedSide === 'left' && (
-                <View style={styles.selectBadge}>
-                  <Text style={styles.selectBadgeText}>✓ 선택됨</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ) : null}
-
-          {/* VS */}
-          <View style={styles.vsWrap}>
-            <Text style={styles.vsText}>VS</Text>
-          </View>
-
-          {/* 오른쪽 카드 (흰색) */}
-          {right ? (
-            <TouchableOpacity
-              style={[styles.restaurantCard, styles.rightCard, selectedSide === 'right' && styles.selectedCardAlt]}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (selectedSide === 'right') {
-                  if (right.place_url) setWebViewUrl(right.place_url);
-                } else {
-                  setSelectedSide('right');
-                }
-              }}
-            >
-              <Text style={[styles.cardEmoji, styles.cardEmojiDark]}>{getCategoryEmoji(right.category_name)}</Text>
-              <Text style={[styles.cardCategory, styles.cardCategoryDark]}>
-                {getCategoryLabel(right.category_name)}
-              </Text>
-              <Text style={[styles.cardName, styles.cardNameDark]}>{right.place_name}</Text>
-              <Text style={[styles.cardAddress, styles.cardAddressDark]} numberOfLines={2}>
-                {right.road_address_name || right.address_name}
-              </Text>
-              {selectedSide === 'right' && (
-                <View style={[styles.selectBadge, styles.selectBadgeAlt]}>
-                  <Text style={styles.selectBadgeText}>✓ 선택됨</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* 카카오 장소 WebView 패널 — absoluteFill이라 하단 버튼바를 가리지 않음 */}
-        {webViewUrl ? (
-          <View style={[StyleSheet.absoluteFill, styles.webViewPanel]}>
-            <View style={styles.webViewHeader}>
-              <Text style={styles.webViewTitle}>장소 정보</Text>
-              <TouchableOpacity style={styles.webViewClose} onPress={() => setWebViewUrl(null)}>
-                <Text style={styles.webViewCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+      {/* WebView + 오늘의 픽 버튼 */}
+      <View style={styles.webCardContainer}>
+        <View style={styles.webViewWrapper}>
+          {activeWebUrl ? (
             <WebView
-              key={webViewUrl}
-              source={{ uri: webViewUrl }}
+              key={activeWebUrl}
+              source={{ uri: activeWebUrl }}
+              style={styles.webView}
               javaScriptEnabled={true}
               domStorageEnabled={true}
               startInLoadingState={true}
               userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-              style={{ flex: 1 }}
               renderLoading={() => (
                 <View style={styles.loader}>
                   <ActivityIndicator size="large" color="#FF6B35" />
@@ -270,11 +212,72 @@ export default function TournamentScreen() {
                 </View>
               )}
             />
-          </View>
+          ) : (
+            <View style={styles.webPlaceholder}>
+              <Text style={styles.webPlaceholderText}>👆 카드를 선택하면{'\n'}맛집 정보가 표시돼요</Text>
+            </View>
+          )}
+        </View>
+        {selectedSide && activeWebUrl && (
+          <TouchableOpacity style={styles.todayPickBtn} onPress={handleTodayPick} activeOpacity={0.85}>
+            <Text style={styles.todayPickText}>⭐ 오늘의 픽!</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+	  {/* 카드 (좌우 배치) */}
+      <View style={styles.matchup}>
+        {/* 왼쪽 카드 */}
+        {left ? (
+          <TouchableOpacity
+            style={[styles.restaurantCard, selectedSide === 'left' && styles.selectedCard]}
+            activeOpacity={0.85}
+            onPress={() => setSelectedSide('left')}
+          >
+            <Text style={styles.cardEmoji}>{getCategoryEmoji(left.category_name)}</Text>
+            <Text style={[styles.cardCategory, selectedSide === 'left' && styles.cardCategoryLight]}>
+              {getCategoryLabel(left.category_name)}
+            </Text>
+            <Text style={[styles.cardName, selectedSide === 'left' && styles.cardNameLight]} numberOfLines={2}>
+              {left.place_name}
+            </Text>
+            {selectedSide === 'left' && (
+              <View style={styles.selectBadge}>
+                <Text style={styles.selectBadgeText}>✓ 선택됨</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ) : null}
+
+        {/* VS */}
+        <View style={styles.vsWrap}>
+          <Text style={styles.vsText}>VS</Text>
+        </View>
+
+        {/* 오른쪽 카드 */}
+        {right ? (
+          <TouchableOpacity
+            style={[styles.restaurantCard, selectedSide === 'right' && styles.selectedCard]}
+            activeOpacity={0.85}
+            onPress={() => setSelectedSide('right')}
+          >
+            <Text style={styles.cardEmoji}>{getCategoryEmoji(right.category_name)}</Text>
+            <Text style={[styles.cardCategory, selectedSide === 'right' && styles.cardCategoryLight]}>
+              {getCategoryLabel(right.category_name)}
+            </Text>
+            <Text style={[styles.cardName, selectedSide === 'right' && styles.cardNameLight]} numberOfLines={2}>
+              {right.place_name}
+            </Text>
+            {selectedSide === 'right' && (
+              <View style={styles.selectBadge}>
+                <Text style={styles.selectBadgeText}>✓ 선택됨</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* 하단 버튼 바 — content 바깥이라 WebView 패널에 가려지지 않음 */}
+      {/* 하단 버튼 바 */}
       <View style={styles.bottomBar}>
         <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
           <Text style={styles.backBtnText}>← 이전으로</Text>
@@ -311,21 +314,30 @@ const styles = StyleSheet.create({
   progressTrack: { height: 3, backgroundColor: '#E5E7EB' },
   progressFill: { height: 3, backgroundColor: '#FF6B35' },
 
-  content: { flex: 1, padding: 20, justifyContent: 'center' },
   question: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#111827',
     textAlign: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
 
-  matchup: { gap: 12 },
+  /* ── 카드 (가로 배치) ── */
+  matchup: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: 12,
+    gap: 8,
+  },
 
   restaurantCard: {
-    borderRadius: 20,
-    padding: 24,
-    gap: 6,
+    flex: 1,
+    borderRadius: 16,
+    padding: 12,
+    gap: 3,
+    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOpacity: 0.09,
     shadowRadius: 12,
@@ -333,65 +345,80 @@ const styles = StyleSheet.create({
     elevation: 4,
     borderWidth: 3,
     borderColor: 'transparent',
+    minHeight: 100,
   },
-  leftCard: { backgroundColor: '#FF6B35' },
-  rightCard: { backgroundColor: '#FFFFFF' },
-  selectedCard: { borderColor: '#FFD700', shadowOpacity: 0.25, shadowRadius: 16 },
-  selectedCardAlt: { borderColor: '#FF6B35', shadowOpacity: 0.25, shadowRadius: 16 },
+  selectedCard: {
+    backgroundColor: '#FF6B35',
+    borderColor: '#FF6B35',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+  },
 
-  cardEmoji: { fontSize: 28, marginBottom: 2 },
-  cardEmojiDark: {},
-  cardCategory: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
-  cardCategoryDark: { color: '#9CA3AF' },
-  cardName: { fontSize: 20, fontWeight: '800', color: '#FFFFFF' },
-  cardNameDark: { color: '#111827' },
-  cardAddress: { fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 18 },
-  cardAddressDark: { color: '#6B7280' },
+  cardEmoji: { fontSize: 20, marginBottom: 2 },
+  cardCategory: { fontSize: 11, color: '#9CA3AF', fontWeight: '600' },
+  cardCategoryLight: { color: 'rgba(255,255,255,0.8)' },
+  cardName: { fontSize: 14, fontWeight: '800', color: '#111827' },
+  cardNameLight: { color: '#FFFFFF' },
 
   selectBadge: {
-    alignSelf: 'flex-end',
-    marginTop: 6,
+    alignSelf: 'flex-start',
+    marginTop: 4,
     backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 20,
   },
-  selectBadgeAlt: { backgroundColor: '#FF6B35' },
-  selectBadgeText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  selectBadgeText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
 
-  vsWrap: { alignItems: 'center', paddingVertical: 2 },
-  vsText: { fontSize: 16, fontWeight: '900', color: '#D1D5DB', letterSpacing: 2 },
+  vsWrap: { alignItems: 'center', justifyContent: 'center', width: 36 },
+  vsText: { fontSize: 14, fontWeight: '900', color: '#D1D5DB', letterSpacing: 2 },
 
-  /* ── WebView 패널 ── */
-  webViewPanel: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+  /* ── WebView + 오늘의 픽 ── */
+  webCardContainer: {
+    flex: 1,
+    marginHorizontal: 12,
+    marginTop: 10,
+    position: 'relative',
+  },
+  webViewWrapper: {
+    flex: 1,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+    backgroundColor: '#f0f0f0',
   },
-  webViewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FF6B35',
-  },
-  webViewTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-  webViewClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  webView: { flex: 1 },
+  webPlaceholder: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
   },
-  webViewCloseText: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-
+  webPlaceholderText: {
+    fontSize: 15,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  todayPickBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+    zIndex: 10,
+  },
+  todayPickText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
   loader: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',

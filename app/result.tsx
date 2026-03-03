@@ -13,6 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { FloatingContactButton } from '@/components/floating-contact-button';
+// ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
+import { logRestaurantSelected } from '@/lib/analytics';
+// ─────────────────────────────────────────────────────────────────────────
 
 type Restaurant = {
   id: string;
@@ -120,6 +124,17 @@ export default function ResultScreen() {
   // 결과 화면 진입 즉시 컨페티 시작, 언마운트 시 정리
   useEffect(() => {
     startConfetti();
+    // ── [Firebase Analytics] 최종 선택 가게 기록 ──────────────────────
+    if (winner) {
+      logRestaurantSelected(
+        winner.id,
+        winner.place_name,
+        getCategoryLabel(winner.category_name),
+        'random',
+        '',
+      );
+    }
+    // ────────────────────────────────────────────────────────────────────
     return () => {
       confettiActiveRef.current = false;
     };
@@ -230,6 +245,8 @@ export default function ResultScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <FloatingContactButton />
 
       {/* ── 낙하 컨페티 오버레이 (ScrollView 뒤에 렌더링해야 위에 표시됨) ── */}
       {showConfetti && (

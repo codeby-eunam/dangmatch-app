@@ -12,14 +12,16 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useUser } from '@/context/UserContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 // @로 시작, 영문 첫 글자, 이후 영문/숫자/./_ 조합, 2~20자 (@포함 총 3~21자)
 const USER_ID_REGEX = /^@[a-zA-Z][a-zA-Z0-9._]{1,19}$/;
 
 export default function SetupProfileScreen() {
   const router = useRouter();
+  const { kakaoId = '', profileImage = '' } = useLocalSearchParams<{ kakaoId: string; profileImage: string }>();
   const { setupProfile, checkUserIdAvailable } = useUser();
 
   const [userId, setUserId] = useState('@');
@@ -69,10 +71,11 @@ export default function SetupProfileScreen() {
 
     setSubmitting(true);
     try {
-      await setupProfile(userId, nickname.trim());
+      await setupProfile(userId, nickname.trim(), kakaoId, profileImage || undefined);
       router.replace('/(tabs)');
-    } catch {
-      Alert.alert('오류', '프로필 설정에 실패했습니다. 다시 시도해주세요.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '알 수 없는 오류';
+      Alert.alert('오류', `프로필 설정에 실패했습니다.\n${message}`);
     } finally {
       setSubmitting(false);
     }
@@ -97,7 +100,7 @@ export default function SetupProfileScreen() {
             <View style={s.stepBadge}>
               <Text style={s.stepBadgeText}>프로필 설정</Text>
             </View>
-            <Text style={s.title}>당매치에서 사용할{'\n'}아이디와 닉네임을 만들어요</Text>
+            <Text style={s.title}>당맷치에서 사용할{'\n'}아이디와 닉네임을 만들어요</Text>
             <Text style={s.subtitle}>아이디는 한 번 설정하면 변경이 어려워요</Text>
           </View>
 
@@ -185,6 +188,8 @@ export default function SetupProfileScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }

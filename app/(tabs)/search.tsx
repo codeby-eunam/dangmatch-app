@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLibrary, type ListItem } from '@/context/LibraryContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;
@@ -159,6 +160,8 @@ export default function SearchScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }

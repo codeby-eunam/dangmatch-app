@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -49,6 +50,8 @@ export default function RestaurantDetailScreen() {
           )}
         />
       </View>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }

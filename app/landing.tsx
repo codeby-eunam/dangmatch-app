@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -9,24 +10,41 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { CommonActions } from '@react-navigation/native';
 import { useUser } from '@/context/UserContext';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 export default function LandingScreen() {
   const router = useRouter();
-  const { loginWithKakao, setHasSeenLanding } = useUser();
+  const navigation = useNavigation();
+  const { loginWithKakao, setHasSeenLanding, isLoggedIn, hasSeenLanding } = useUser();
   const [loading, setLoading] = useState(false);
+
+  // 로그인 성공 or 비로그인 시작 → 홈 탭 (index)
+  useEffect(() => {
+    if (isLoggedIn || hasSeenLanding) {
+      navigation.dispatch(
+        CommonActions.reset({ index: 0, routes: [{ name: '(tabs)' }] })
+      );
+    }
+  }, [isLoggedIn, hasSeenLanding]);
 
   const handleKakaoLogin = async () => {
     setLoading(true);
     try {
-      const needsSetup = await loginWithKakao();
-      setHasSeenLanding();
-      if (needsSetup) {
-        router.replace('/setup-profile');
-      } else {
-        router.replace('/(tabs)');
+      const result = await loginWithKakao();
+      if (result === null) {
+        // Android/Expo Go: auth/callback.tsx 가 처리 (아무것도 안 해도 됨)
+        return;
       }
+      if (result.needsSetup) {
+        router.replace({
+          pathname: '/setup-profile',
+          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+        });
+      }
+      // iOS 기존 유저: isLoggedIn → useEffect 가 /(tabs)로 이동
     } catch (err) {
       Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
     } finally {
@@ -36,7 +54,7 @@ export default function LandingScreen() {
 
   const handleSkip = () => {
     setHasSeenLanding();
-    router.replace('/(tabs)');
+    // hasSeenLanding이 true가 되면 useEffect가 /(tabs)로 이동
   };
 
   return (
@@ -44,9 +62,9 @@ export default function LandingScreen() {
       {/* 상단 브랜딩 */}
       <View style={s.topSection}>
         <View style={s.logoContainer}>
-          <Text style={s.logoEmoji}>🍽️</Text>
+          <Image source={require('@/assets/images/logo.png')} style={s.logoImage} />
         </View>
-        <Text style={s.appName}>당매치</Text>
+        <Text style={s.appName}>당맷치</Text>
         <Text style={s.tagline}>오늘 뭐 먹을지, 고민 끝!</Text>
         <Text style={s.subTagline}>위치 기반 맛집 추천 & 나만의 보관함</Text>
       </View>
@@ -93,6 +111,8 @@ export default function LandingScreen() {
       <Text style={s.footerNote}>
         로그인 시 보관함과 마이페이지를 이용할 수 있어요
       </Text>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }
@@ -122,17 +142,17 @@ const s = StyleSheet.create({
     width: 108,
     height: 108,
     borderRadius: 32,
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#006D77',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 22,
-    shadowColor: '#FF6B35',
+    shadowColor: '#006D77',
     shadowOpacity: 0.38,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 7 },
     elevation: 10,
   },
-  logoEmoji: { fontSize: 56 },
+  logoImage: { width: 72, height: 72, resizeMode: 'contain' },
   appName: {
     fontSize: 40,
     fontWeight: '800',

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { FloatingContactButton } from '@/components/floating-contact-button';
 
 interface NotifItem {
   key: string;
@@ -87,9 +88,11 @@ export default function NotificationSettingsScreen() {
         </View>
 
         <Text style={s.footerNote}>
-          알림을 모두 끄려면 기기의 [설정 → 앱 → 당매치]에서 변경해주세요.
+          알림을 모두 끄려면 기기의 [설정 → 앱 → 당맷치]에서 변경해주세요.
         </Text>
       </ScrollView>
+
+      <FloatingContactButton />
     </SafeAreaView>
   );
 }

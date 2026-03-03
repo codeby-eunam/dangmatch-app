@@ -35,9 +35,30 @@
       "package": "com.anonymous.dangmatchapp"
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
+		"bundler": "metro",
+		"favicon": "./assets/dangmatch_logo.png",
+		"pwa": {
+			"name": "당매치",
+			"shortName": "당매치",
+			"description": "당신의 메뉴 선택을 더욱 쉽게!",
+			"themeColor": "#006D77",
+			"backgroundColor": "#EDF6F9",
+			"display": "standalone",
+			"orientation": "portrait",
+			"icons": [
+			{
+				"src": "./assets/dangmatch_logo.png",
+				"sizes": "192x192",
+				"type": "image/png"
+			},
+			{
+				"src": "./assets/dangmatch_logo.png",
+				"sizes": "512x512",
+				"type": "image/png"
+			}
+			]
+		}
+	},
     "plugins": [
       "expo-router",
       [
