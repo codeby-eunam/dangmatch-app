@@ -2,20 +2,23 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { FloatingContactButton } from '@/components/floating-contact-button';
 import {
-  ActivityIndicator,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
+import KakaoWebView from '@/components/KakaoWebView';
 
 export default function RestaurantDetailScreen() {
   const router = useRouter();
-  const { placeId, placeUrl } = useLocalSearchParams<{
+  const { placeId, placeUrl, placeName, category, address, phone } = useLocalSearchParams<{
     placeId: string;
     placeUrl: string;
+    placeName?: string;
+    category?: string;
+    address?: string;
+    phone?: string;
   }>();
 
   const webUrl =
@@ -34,20 +37,12 @@ export default function RestaurantDetailScreen() {
 
       {/* WebView */}
       <View style={s.webWrap}>
-        <WebView
-          key={webUrl}
-          source={{ uri: webUrl }}
-          style={s.webView}
-          javaScriptEnabled
-          domStorageEnabled
-          startInLoadingState
-          userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-          renderLoading={() => (
-            <View style={s.loader}>
-              <ActivityIndicator size="large" color="#FF6B35" />
-              <Text style={s.loaderTxt}>가게 정보를 불러오는 중...</Text>
-            </View>
-          )}
+        <KakaoWebView
+          uri={webUrl}
+          placeName={placeName}
+          category={category}
+          address={address}
+          phone={phone}
         />
       </View>
 
@@ -81,12 +76,4 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
   webView: { flex: 1 },
-  loader: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loaderTxt: { color: '#6B7280', fontSize: 14 },
 });

@@ -4,11 +4,10 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { WebView } from 'react-native-webview';
+import KakaoWebView from '@/components/KakaoWebView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 type Restaurant = {
@@ -196,21 +195,13 @@ export default function TournamentScreen() {
       {/* WebView + 오늘의 픽 버튼 */}
       <View style={styles.webCardContainer}>
         <View style={styles.webViewWrapper}>
-          {activeWebUrl ? (
-            <WebView
-              key={activeWebUrl}
-              source={{ uri: activeWebUrl }}
-              style={styles.webView}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              startInLoadingState={true}
-              userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
-              renderLoading={() => (
-                <View style={styles.loader}>
-                  <ActivityIndicator size="large" color="#FF6B35" />
-                  <Text style={styles.loaderText}>맛집 정보를 불러오는 중...</Text>
-                </View>
-              )}
+          {activeWebUrl && activeRestaurant ? (
+            <KakaoWebView
+              uri={activeWebUrl}
+              placeName={activeRestaurant.place_name}
+              category={activeRestaurant.category_name?.split(' > ').pop()}
+              address={activeRestaurant.road_address_name || activeRestaurant.address_name}
+              phone={activeRestaurant.phone}
             />
           ) : (
             <View style={styles.webPlaceholder}>

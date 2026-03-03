@@ -335,7 +335,7 @@ export default function LibraryDetailScreen() {
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() =>
-                  router.push({ pathname: '/restaurant-detail' as any, params: { placeId: item.id, placeUrl: '' } })
+                  router.push({ pathname: '/restaurant-detail' as any, params: { placeId: item.id, placeUrl: '', placeName: item.name, category: item.category, address: item.desc } })
                 }
               >
                 <View style={s.imgWrap}>
