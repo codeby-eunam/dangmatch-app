@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { CommonActions } from '@react-navigation/native';
 import { useUser, getLoginReturnTo } from '@/context/UserContext';
@@ -15,6 +15,10 @@ export default function AuthCallbackScreen() {
   const params = useLocalSearchParams<Record<string, string>>();
 
   useEffect(() => {
+    // 웹(팝업)에서는 openAuthSessionAsync가 URL을 감지해 메인 창에서 처리
+    // auth/callback.tsx가 navigate하면 URL이 바뀌어서 감지 실패하므로 여기서는 아무것도 안 함
+    if (Platform.OS === 'web') return;
+
     try {
       const result = processOAuthParams(params);
       if (result.needsSetup) {
