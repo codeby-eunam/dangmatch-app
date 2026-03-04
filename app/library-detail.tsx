@@ -29,7 +29,7 @@ const H_PAD = 16;
 const CARD_GAP = 12;
 const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const IMG_H = Math.round(CARD_W * 0.72);
-const BASE_URL = 'https://dangmatch.vercel.app';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dangmatch-y7al.vercel.app';
 const BOTTOM_BAR_H = Platform.OS === 'ios' ? 84 : 64;
 const REORDER_ITEM_H = 72;
 

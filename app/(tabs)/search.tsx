@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -12,8 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLibrary, type ListItem } from '@/context/LibraryContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
+import { BASE_URL, toListItem, useLibrary, type ListItem } from '@/context/LibraryContext';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;
@@ -27,11 +27,17 @@ export default function SearchScreen() {
   const router = useRouter();
   const { lists } = useLibrary();
   const [query, setQuery] = useState('');
+  const [publicLists, setPublicLists] = useState<ListItem[]>([]);
 
-  const publicLists = useMemo(
-    () => lists.filter((l) => l.isPublic),
-    [lists]
-  );
+   useEffect(() => {
+    fetch(`${BASE_URL}/api/lists/public`)
+      .then((r) => r.json())
+      .then((data) => {
+        const items: ListItem[] = (data.lists ?? []).map(toListItem);
+        setPublicLists(items);
+      })
+      .catch((err) => console.error('[SearchScreen] 공개 리스트 로드 실패:', err));
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
