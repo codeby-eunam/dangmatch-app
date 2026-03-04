@@ -264,9 +264,15 @@ export default function LibraryDetailScreen() {
     setRenameVisible(false);
   };
 
-  const handleShare = () => {
-    Share.share({ message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!` });
-  };
+	const handleShare = () => {
+	const shareUrl = `${BASE_URL}/library-detail?listId=${listId}&listTitle=${encodeURIComponent(title)}`; // 실제 페이지 URL로 교체
+
+	Share.share({
+		message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`, // Android용 (message에 URL 포함)
+		url: shareUrl, // iOS용 (별도 url 파라미터)
+		title: title,
+	});
+	};
 
   const handleTournament = () => {
     // contextList.places에 placeUrl이 있으므로 직접 참조
