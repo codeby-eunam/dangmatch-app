@@ -242,6 +242,7 @@ export default function LibraryDetailScreen() {
       {
         text: '삭제', style: 'destructive',
         onPress: () => {
+			console.log('Deleting list with ID:', listId); // 디버그 로그
           if (contextList && listId) deleteList(listId);
           router.back();
         },
