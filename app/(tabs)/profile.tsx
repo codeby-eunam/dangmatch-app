@@ -15,8 +15,10 @@ import { useRouter } from 'expo-router';
 import { useUser, setLoginReturnTo } from '@/context/UserContext';
 import { useLibrary } from '@/context/LibraryContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
+import * as ExpoLinking from 'expo-linking';
 
 const BADGE_EARLY = require('@/assets/images/badge-early-member.png');
+const API_BASE = 'https://dangmatch.vercel.app';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -24,26 +26,31 @@ export default function ProfileScreen() {
   const { lists } = useLibrary();
   const scrollViewRef = useRef<ScrollView>(null);
   const [badgeCardY, setBadgeCardY] = useState(0);
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleKakaoLogin = async () => {
-    setLoginReturnTo('profile');
-    setLoginLoading(true);
-    try {
-      const result = await loginWithKakao();
-      if (result === null) return; // Android: auth/callback.tsx 가 처리
-      if (result.needsSetup) {
-        router.push({
-          pathname: '/setup-profile',
-          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
-        });
-      }
-    } catch (err) {
-      Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoginLoading(false);
-    }
-  };
+	const handleKakaoLogin = async () => {
+	setLoginReturnTo('profile');
+	setLoading(true);
+	try {
+		if (Platform.OS === 'web') {
+		const redirectUri = ExpoLinking.createURL('auth/callback');
+		window.location.href = `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`;
+		return;
+		}
+		const result = await loginWithKakao();
+		if (result === null) return;
+		if (result.needsSetup) {
+		router.push({
+			pathname: '/setup-profile',
+			params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+		});
+		}
+	} catch (err) {
+		Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
+	} finally {
+		setLoading(false);
+	}
+	};
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
@@ -70,9 +77,9 @@ export default function ProfileScreen() {
             style={s.kakaoBtn}
             onPress={handleKakaoLogin}
             activeOpacity={0.85}
-            disabled={loginLoading}
+            disabled={loading}
           >
-            {loginLoading ? (
+            {loading ? (
               <ActivityIndicator color="#3C1E1E" />
             ) : (
               <>

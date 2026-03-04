@@ -47,7 +47,8 @@ interface LibraryContextValue {
 
 // ─── 상수 ──────────────────────────────────────────────────────────────────
 
-const BASE_URL = 'https://dangmatch.vercel.app';
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dangmatch.vercel.app';
+export { toListItem };
 const TOGGLE_DEBOUNCE_MS = 1500;
 
 // ─── API 헬퍼 ──────────────────────────────────────────────────────────────
@@ -320,28 +321,26 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
    * 공개 ↔ 비공개 전환.
    * UI는 즉시 반영, 1.5초 debounce 후 최종 상태만 Firebase에 전송.
    */
-  const togglePublic = useCallback(
-    (listId: string) => {
-      setLists((prev) =>
-        prev.map((l) => (l.id === listId ? { ...l, isPublic: !l.isPublic } : l)),
-      );
+	const togglePublic = useCallback(
+	(listId: string) => {
+		setLists((prev) =>
+		prev.map((l) => (l.id === listId ? { ...l, isPublic: !l.isPublic } : l)),
+		);
 
-      const existing = debounceMap.current.get(listId);
-      if (existing) clearTimeout(existing);
+		const existing = debounceMap.current.get(listId);
+		if (existing) clearTimeout(existing);
 
-      const timer = setTimeout(() => {
-        debounceMap.current.delete(listId);
-        setLists((prev) => {
-          const list = prev.find((l) => l.id === listId);
-          if (list) syncVisibility(list, list.isPublic);
-          return prev;
-        });
-      }, TOGGLE_DEBOUNCE_MS);
+		const timer = setTimeout(() => {
+		debounceMap.current.delete(listId);
+		// ✅ setLists 밖에서 listsRef로 참조
+		const list = listsRef.current.find((l) => l.id === listId);
+		if (list) syncVisibility(list, list.isPublic);
+		}, TOGGLE_DEBOUNCE_MS);
 
-      debounceMap.current.set(listId, timer);
-    },
-    [syncVisibility],
-  );
+		debounceMap.current.set(listId, timer);
+	},
+	[syncVisibility],
+	);
 
   const removePlaceFromList = useCallback(
     (listId: string, placeId: string) => {
