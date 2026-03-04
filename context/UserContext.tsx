@@ -131,15 +131,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
    */
 	const loginWithKakao = useCallback(async (): Promise<OAuthResult | null> => {
 		const redirectUri = ExpoLinking.createURL('auth/callback');
-		console.log('🔵 redirectUri =', redirectUri);
 
 		const result = await WebBrowser.openAuthSessionAsync(
 			`${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`,
 			redirectUri
 		);
-
-		// ← 이 로그 추가
-		console.log('🟢 openAuthSession result =', JSON.stringify(result));
 
 		if (result.type === 'success' && result.url) {
 			const queryString = result.url.includes('?') ? result.url.split('?')[1] : '';
