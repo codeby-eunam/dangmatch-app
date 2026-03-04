@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLibrary, type Place, type ListItem } from '@/context/LibraryContext';
 import { useUser, setLoginReturnTo } from '@/context/UserContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
+import * as ExpoLinking from 'expo-linking';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;
@@ -27,14 +28,14 @@ const CARD_GAP = 12;
 const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const IMG_SIZE = CARD_W / 2;
 
-const BASE_URL = 'https://dangmatch.vercel.app';
-
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dangmatch-y7al.vercel.app';
+const API_BASE = 'https://dangmatch.vercel.app';
 
 export default function LibraryScreen() {
   const router = useRouter();
   const { lists, listsLoading, addList, deleteList, renameList, togglePublic } = useLibrary();
   const { isLoggedIn, loginWithKakao } = useUser();
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // ── 새 리스트 만들기 모달 ── (Rules of Hooks: 모든 훅은 조건부 return 전에 선언)
   const [modalVisible, setModalVisible] = useState(false);
@@ -58,25 +59,29 @@ export default function LibraryScreen() {
   const cardTotalH = CARD_W + 68 + 40; // 공개토글 행 높이 추가
 
   // ── 카카오 로그인 핸들러 ──
-  const handleKakaoLogin = async () => {
-    setLoginReturnTo('library');
-    setLoginLoading(true);
-    try {
-      const result = await loginWithKakao();
-      if (result === null) return; // Android: auth/callback.tsx가 처리
-      if (result.needsSetup) {
-        router.push({
-          pathname: '/setup-profile',
-          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
-        });
-      }
-      // iOS 기존 유저: isLoggedIn → 컴포넌트 재렌더링 → 보관함 화면 표시
-    } catch {
-      Alert.alert('오류', '로그인에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
+	const handleKakaoLogin = async () => {
+	setLoginReturnTo('library');
+	setLoading(true);
+	try {
+		if (Platform.OS === 'web') {
+		const redirectUri = ExpoLinking.createURL('auth/callback');
+		window.location.href = `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`;
+		return;
+		}
+		const result = await loginWithKakao();
+		if (result === null) return;
+		if (result.needsSetup) {
+		router.push({
+			pathname: '/setup-profile',
+			params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
+		});
+		}
+	} catch {
+		Alert.alert('오류', '로그인에 실패했습니다. 다시 시도해주세요.');
+	} finally {
+		setLoading(false);
+	}
+	};
 
   // ── 비로그인 화면 ──
   if (!isLoggedIn) {
@@ -92,9 +97,9 @@ export default function LibraryScreen() {
             style={s.kakaoBtn}
             onPress={handleKakaoLogin}
             activeOpacity={0.85}
-            disabled={loginLoading}
+            disabled={loading}
           >
-            {loginLoading ? (
+            {loading ? (
               <ActivityIndicator color="#3C1E1E" />
             ) : (
               <>
