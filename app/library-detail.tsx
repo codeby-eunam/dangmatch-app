@@ -242,6 +242,7 @@ export default function LibraryDetailScreen() {
       {
         text: '삭제', style: 'destructive',
         onPress: () => {
+			console.log('Deleting list with ID:', listId); // 디버그 로그
           if (contextList && listId) deleteList(listId);
           router.back();
         },
@@ -263,9 +264,20 @@ export default function LibraryDetailScreen() {
     setRenameVisible(false);
   };
 
-  const handleShare = () => {
-    Share.share({ message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!` });
-  };
+	const handleShare = () => {
+		const token = contextList?.shareToken;
+		if (!token) {
+			Alert.alert('공유 불가', '공유 토큰이 없어요. 잠시 후 다시 시도해주세요.');
+			return;
+		}
+
+		const shareUrl = `${BASE_URL}/share/${token}`;
+		Share.share({
+			message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`,
+			url: shareUrl,
+			title: title,
+		});
+	};
 
   const handleTournament = () => {
     // contextList.places에 placeUrl이 있으므로 직접 참조

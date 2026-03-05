@@ -30,6 +30,7 @@ export interface ListItem {
   places: Place[];
   isPublic: boolean;
   shareToken?: string; // Firebase 토큰 맵핑용
+  ownerUid?: string;
 }
 
 interface LibraryContextValue {
@@ -98,6 +99,7 @@ function toListItem(raw: {
   restaurants: Array<{ id: string; name: string; category: string; address: string; kakaoUrl?: string; images?: string[] }>;
   isPublic: boolean;
   shareToken: string;
+  ownerUid: string;
 }): ListItem {
   const places: Place[] = raw.restaurants.map((r) => ({
     id: r.id,
@@ -120,6 +122,7 @@ function toListItem(raw: {
     places,
     isPublic: raw.isPublic,
     shareToken: raw.shareToken,
+	ownerUid: raw.ownerUid,
   };
 }
 
@@ -239,6 +242,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
           images: rebuildImages(places),
           places,
           isPublic: false,
+			ownerUid: 'local',
         }, ...prev]);
         return;
       }
@@ -250,6 +254,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           uid: user.kakaoId,
           title,
+          ownerUid: user.kakaoId,
           places: places.map((p) => ({
             id: p.id,
             name: p.name,
