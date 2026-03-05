@@ -47,8 +47,19 @@ export default function SearchScreen() {
 
 	const openDetail = (item: ListItem) => {
 		router.push({
-			pathname: '/share-detail' as any,
-			params: { shareToken: item.shareToken },
+			pathname: '/library-detail' as any,
+			params: {
+			listId: item.id,
+			listTitle: item.title,
+			listCount: String(item.count),
+			restaurants: JSON.stringify(
+				item.places.map((p) => ({
+				id: p.id, place_name: p.name, category_name: p.categoryName,
+				address_name: p.address, road_address_name: p.address,
+				phone: '', place_url: p.placeUrl,
+				}))
+			),
+			},
 		});
 	};
 
