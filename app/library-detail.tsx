@@ -279,6 +279,7 @@ export default function LibraryDetailScreen() {
 		});
 	};
 
+
   const handleTournament = () => {
     // contextList.places에 placeUrl이 있으므로 직접 참조
     const source = contextList?.places ?? [];
