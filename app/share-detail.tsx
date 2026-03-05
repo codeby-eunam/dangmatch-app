@@ -36,34 +36,27 @@ interface Restaurant {
 
 export default function ShareDetailScreen() {
   const router = useRouter();
-  const { listId, shareToken } = useLocalSearchParams<{ 
-	listId: string; 
-	shareToken: string; 
-	}>();
+  const { shareToken } = useLocalSearchParams<{ shareToken: string }>();
   const { user } = useUser();
 
   const [listData, setListData] = useState<ListItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-	useEffect(() => {
-		const deepLink = `${BASE_URL}://share-detail?shareToken=${shareToken}`;
-
-		// 딥링크 시도
-		const link = document.createElement('a');
-		link.href = deepLink;
-		link.click();
-
-		// 앱 없으면 2.5초 후 웹으로 fallback
-		const timer = setTimeout(() => {
-			window.location.href = BASE_URL;
-		}, 2500);
-
-		// 앱이 열리면 페이지가 blur되므로 타이머 취소
-		window.addEventListener('blur', () => clearTimeout(timer));
-
-		return () => clearTimeout(timer);
-	}, [shareToken]);
+  useEffect(() => {
+    if (!shareToken) { setError(true); setLoading(false); return; }
+    fetch(`${BASE_URL}/api/share/${shareToken}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.id) {
+          setListData(toListItem(data));
+        } else {
+          setError(true);
+        }
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [shareToken]);
 
   const isOwner = !!user?.kakaoId && listData?.ownerUid === user.kakaoId;
 
@@ -75,17 +68,17 @@ export default function ShareDetailScreen() {
     image: p.image || `https://picsum.photos/seed/${p.id}/300/220`,
   }));
 
-	const handleShare = () => {
-		const token = listData?.shareToken ?? shareToken;
-		if (!token) return;
+  const handleShare = () => {
+    const token = listData?.shareToken ?? shareToken;
+    if (!token) return;
 
-		const shareUrl = `${BASE_URL}/share/${token}`;
-		Share.share({
-			message: `Dangmatch에서 "${listData?.title}" 리스트를 확인해보세요!\n${shareUrl}`,
-			url: shareUrl,
-			title: listData?.title,
-		});
-	};
+    const shareUrl = `${BASE_URL}/share/${token}`;
+    Share.share({
+      message: `Dangmatch에서 "${listData?.title}" 리스트를 확인해보세요!\n${shareUrl}`,
+      url: shareUrl,
+      title: listData?.title,
+    });
+  };
 
   const handleTournament = () => {
     router.push({
@@ -103,10 +96,10 @@ export default function ShareDetailScreen() {
   };
 
   const handleEditPress = () => {
-    // 내 보관함이면 library-detail로 이동
+    if (!listData?.id) return;
     router.push({
       pathname: '/library-detail' as any,
-      params: { listId },
+      params: { listId: listData.id },
     });
   };
 
@@ -154,7 +147,6 @@ export default function ShareDetailScreen() {
             <MaterialIcons name="ios-share" size={15} color="#374151" />
             <Text style={s.shareTxt}>공유하기</Text>
           </TouchableOpacity>
-          {/* 내 보관함이면 편집 버튼 노출 */}
           {isOwner && (
             <TouchableOpacity style={s.editBtn} onPress={handleEditPress} activeOpacity={0.8}>
               <MaterialIcons name="edit" size={15} color="#FFFFFF" />
@@ -184,7 +176,7 @@ export default function ShareDetailScreen() {
           <Text style={s.listSubtitle}>찜한 최고의 맛집 리스트 ({restaurantList.length}곳)</Text>
         </View>
 
-        {/* 카드 그리드 - 읽기 전용 (삭제 버튼 없음) */}
+        {/* 카드 그리드 - 읽기 전용 */}
         <View style={s.grid}>
           {restaurantList.map((item) => (
             <View key={item.id} style={s.card}>
