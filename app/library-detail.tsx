@@ -265,13 +265,18 @@ export default function LibraryDetailScreen() {
   };
 
 	const handleShare = () => {
-	const shareUrl = `${BASE_URL}/library-detail?listId=${listId}&listTitle=${encodeURIComponent(title)}`; // 실제 페이지 URL로 교체
+		const token = contextList?.shareToken;
+		if (!token) {
+			Alert.alert('공유 불가', '공유 토큰이 없어요. 잠시 후 다시 시도해주세요.');
+			return;
+		}
 
-	Share.share({
-		message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`, // Android용 (message에 URL 포함)
-		url: shareUrl, // iOS용 (별도 url 파라미터)
-		title: title,
-	});
+		const shareUrl = `${BASE_URL}/share/${token}`;
+		Share.share({
+			message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`,
+			url: shareUrl,
+			title: title,
+		});
 	};
 
   const handleTournament = () => {
