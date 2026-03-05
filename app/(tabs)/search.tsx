@@ -45,12 +45,12 @@ export default function SearchScreen() {
     return publicLists.filter((l) => l.title.toLowerCase().includes(q));
   }, [query, publicLists]);
 
-  const openDetail = (item: ListItem) => {
-    router.push({
-      pathname: '/share-detail' as any,
-      params: { listId: item.id },
-    });
-  };
+	const openDetail = (item: ListItem) => {
+		router.push({
+			pathname: '/share-detail' as any,
+			params: { shareToken: item.shareToken },
+		});
+	};
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
