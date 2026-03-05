@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLibrary, type Place } from '@/context/LibraryContext';
+import { useUser } from '@/context/UserContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -63,9 +64,15 @@ export default function LibraryDetailScreen() {
   }>();
 
   const { lists, addPlacesToList, deleteList, renameList, removePlaceFromList } = useLibrary();
+  const { user } = useUser();
 
   /* Context에 해당 listId가 있으면 Context 데이터 우선 사용 */
   const contextList = lists.find((l) => l.id === listId);
+
+  /* 내 보관함 여부 */
+  const isOwner = !!user?.kakaoId && (
+    contextList ? contextList.ownerUid === user.kakaoId : false
+  );
 
   const parseFromParam = (): Restaurant[] => {
     if (!restaurantsParam) return [];
@@ -242,7 +249,7 @@ export default function LibraryDetailScreen() {
       {
         text: '삭제', style: 'destructive',
         onPress: () => {
-			console.log('Deleting list with ID:', listId); // 디버그 로그
+          console.log('Deleting list with ID:', listId);
           if (contextList && listId) deleteList(listId);
           router.back();
         },
@@ -264,24 +271,21 @@ export default function LibraryDetailScreen() {
     setRenameVisible(false);
   };
 
-	const handleShare = () => {
-		const token = contextList?.shareToken;
-		if (!token) {
-			Alert.alert('공유 불가', '공유 토큰이 없어요. 잠시 후 다시 시도해주세요.');
-			return;
-		}
-
-		const shareUrl = `${BASE_URL}/share/${token}`;
-		Share.share({
-			message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`,
-			url: shareUrl,
-			title: title,
-		});
-	};
-
+  const handleShare = () => {
+    const token = contextList?.shareToken;
+    if (!token) {
+      Alert.alert('공유 불가', '공유 토큰이 없어요. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    const shareUrl = `${BASE_URL}/share/${token}`;
+    Share.share({
+      message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`,
+      url: shareUrl,
+      title: title,
+    });
+  };
 
   const handleTournament = () => {
-    // contextList.places에 placeUrl이 있으므로 직접 참조
     const source = contextList?.places ?? [];
     router.push({
       pathname: '/tournament' as any,
@@ -330,15 +334,21 @@ export default function LibraryDetailScreen() {
         <View style={s.titleSection}>
           <View style={s.breadcrumb}>
             <View style={s.breadcrumbDot} />
-            <Text style={s.breadcrumbTxt}>나의 찜 리스트</Text>
+            <Text style={s.breadcrumbTxt}>
+              {isOwner ? '나의 찜 리스트' : `${contextList?.ownerUid ?? '누군가'}의 찜 리스트`}
+            </Text>
           </View>
           <View style={s.titleRow}>
             <Text style={s.listTitle} numberOfLines={2}>{title}</Text>
-            <TouchableOpacity style={s.moreBtn} onPress={() => setOptionsVisible(true)} activeOpacity={0.7}>
-              <MaterialIcons name="more-horiz" size={22} color="#374151" />
-            </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity style={s.moreBtn} onPress={() => setOptionsVisible(true)} activeOpacity={0.7}>
+                <MaterialIcons name="more-horiz" size={22} color="#374151" />
+              </TouchableOpacity>
+            )}
           </View>
-          <Text style={s.listSubtitle}>내가 찜한 최고의 맛집 리스트 ({restaurantList.length}곳)</Text>
+          <Text style={s.listSubtitle}>
+            {isOwner ? '내가 찜한' : '찜한'} 최고의 맛집 리스트 ({restaurantList.length}곳)
+          </Text>
         </View>
 
         {/* 카드 그리드 */}
@@ -353,13 +363,15 @@ export default function LibraryDetailScreen() {
               >
                 <View style={s.imgWrap}>
                   <Image source={{ uri: item.image }} style={s.cardImg} resizeMode="cover" />
-                  <TouchableOpacity
-                    style={s.deleteBtn}
-                    onPress={() => handleRemovePlace(item.id, item.name)}
-                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                  >
-                    <MaterialIcons name="close" size={13} color="#FFFFFF" />
-                  </TouchableOpacity>
+                  {isOwner && (
+                    <TouchableOpacity
+                      style={s.deleteBtn}
+                      onPress={() => handleRemovePlace(item.id, item.name)}
+                      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                    >
+                      <MaterialIcons name="close" size={13} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <View style={s.cardBody}>
                   <Text style={s.cardName} numberOfLines={1}>{item.name}</Text>
@@ -374,15 +386,17 @@ export default function LibraryDetailScreen() {
             </View>
           ))}
 
-          {/* 새로운 맛집 추가 카드 */}
-          <TouchableOpacity
-            style={[s.newCard, { height: CARD_W + 80 }]}
-            activeOpacity={0.7}
-            onPress={() => setSearchVisible(true)}
-          >
-            <View style={s.newPlusCircle}><Text style={s.newPlusTxt}>+</Text></View>
-            <Text style={s.newCardTxt}>새로운 맛집 추가</Text>
-          </TouchableOpacity>
+          {/* 새로운 맛집 추가 카드 - 내 보관함만 */}
+          {isOwner && (
+            <TouchableOpacity
+              style={[s.newCard, { height: CARD_W + 80 }]}
+              activeOpacity={0.7}
+              onPress={() => setSearchVisible(true)}
+            >
+              <View style={s.newPlusCircle}><Text style={s.newPlusTxt}>+</Text></View>
+              <Text style={s.newCardTxt}>새로운 맛집 추가</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
@@ -608,7 +622,6 @@ const s = StyleSheet.create({
   trophyEmoji: { fontSize: 13 },
   tournamentTxt: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 
-  /* 하단 탭 바 */
   tabBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     height: BOTTOM_BAR_H,
@@ -671,7 +684,6 @@ const s = StyleSheet.create({
   newPlusTxt: { fontSize: 26, color: '#9CA3AF', fontWeight: '300', lineHeight: 30 },
   newCardTxt: { fontSize: 13, fontWeight: '500', color: '#9CA3AF' },
 
-  /* 옵션 시트 */
   modalBg: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   optionSheet: {
     backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -684,7 +696,6 @@ const s = StyleSheet.create({
   cancelItem: { marginTop: 12, paddingVertical: 14, borderRadius: 14, backgroundColor: '#F3F4F6', alignItems: 'center' },
   cancelTxt: { fontSize: 16, fontWeight: '600', color: '#374151' },
 
-  /* 이름 수정 */
   renameBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 24 },
   renameCard: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24, gap: 12 },
   renameTitle: { fontSize: 17, fontWeight: '800', color: '#111827', textAlign: 'center' },
@@ -700,7 +711,6 @@ const s = StyleSheet.create({
   renameConfirmTxt: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   btnDisabled: { backgroundColor: '#E5E7EB' },
 
-  /* 검색 모달 */
   searchSafe: { flex: 1, backgroundColor: '#FFFFFF' },
   searchHeader: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: H_PAD,
@@ -728,7 +738,6 @@ const s = StyleSheet.create({
   centerEmoji: { fontSize: 40 },
   centerTxt: { fontSize: 15, color: '#9CA3AF', fontWeight: '500' },
 
-  /* 순서 바꾸기 (드래그) */
   reorderSafe: { flex: 1, backgroundColor: '#FFFFFF' },
   reorderHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
