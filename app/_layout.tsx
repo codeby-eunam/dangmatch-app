@@ -30,6 +30,7 @@ export default function RootLayout() {
             <Stack.Screen name="library-detail" options={{ headerShown: false }} />
             <Stack.Screen name="restaurant-detail" options={{ headerShown: false }} />
             <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+			<Stack.Screen name="share" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

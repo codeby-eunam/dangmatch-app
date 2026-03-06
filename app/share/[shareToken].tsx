@@ -167,7 +167,7 @@ export default function ShareDetailScreen() {
           <View style={s.breadcrumb}>
             <View style={s.breadcrumbDot} />
             <Text style={s.breadcrumbTxt}>
-              {isOwner ? '나의 찜 리스트' : `${listData.ownerUid ?? '누군가'}의 찜 리스트`}
+              {isOwner ? '나의 찜 리스트' : `${listData.ownerUserId ?? '누군가'}의 찜 리스트`}
             </Text>
           </View>
           <View style={s.titleRow}>
