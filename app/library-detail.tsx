@@ -277,7 +277,7 @@ export default function LibraryDetailScreen() {
       Alert.alert('공유 불가', '공유 토큰이 없어요. 잠시 후 다시 시도해주세요.');
       return;
     }
-    const shareUrl = `${BASE_URL}/share/${token}`;
+    const shareUrl = `https://dangmatch-y7al.vercel.app/share/${token}`;
     Share.share({
       message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`,
       url: shareUrl,

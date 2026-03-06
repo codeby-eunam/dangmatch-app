@@ -72,7 +72,7 @@ export default function ShareDetailScreen() {
     const token = listData?.shareToken ?? shareToken;
     if (!token) return;
 
-    const shareUrl = `${BASE_URL}/share/${token}`;
+    const shareUrl = `https://dangmatch-y7al.vercel.app/share/${token}`;
     Share.share({
       message: `Dangmatch에서 "${listData?.title}" 리스트를 확인해보세요!\n${shareUrl}`,
       url: shareUrl,
