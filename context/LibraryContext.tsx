@@ -31,6 +31,7 @@ export interface ListItem {
   isPublic: boolean;
   shareToken?: string; // Firebase 토큰 맵핑용
   ownerUid?: string;
+  ownerUserId?: string;
 }
 
 interface LibraryContextValue {
@@ -100,6 +101,7 @@ function toListItem(raw: {
   isPublic: boolean;
   shareToken: string;
   ownerUid: string;
+  ownerUserId: string;
 }): ListItem {
   const places: Place[] = raw.restaurants.map((r) => ({
     id: r.id,
@@ -123,6 +125,7 @@ function toListItem(raw: {
     isPublic: raw.isPublic,
     shareToken: raw.shareToken,
 	ownerUid: raw.ownerUid,
+	ownerUserId: raw.ownerUserId,
   };
 }
 
