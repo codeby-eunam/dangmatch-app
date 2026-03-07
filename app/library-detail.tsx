@@ -283,7 +283,6 @@ export default function LibraryDetailScreen() {
     Share.share({
       message: `Dangmatch에서 "${title}" 리스트를 확인해보세요!\n${shareUrl}`,
       url: shareUrl,
-      title: title,
     });
   };
 
