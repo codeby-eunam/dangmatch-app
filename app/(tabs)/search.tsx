@@ -33,6 +33,7 @@ export default function SearchScreen() {
     fetch(`${BASE_URL}/api/lists/public`)
       .then((r) => r.json())
       .then((data) => {
+		console.log('public lists raw:', JSON.stringify(data.lists?.[0]));
         const items: ListItem[] = (data.lists ?? []).map(toListItem);
         setPublicLists(items);
       })
@@ -46,21 +47,7 @@ export default function SearchScreen() {
   }, [query, publicLists]);
 
 	const openDetail = (item: ListItem) => {
-		router.push({
-			pathname: '/library-detail' as any,
-			params: {
-			listId: item.id,
-			listTitle: item.title,
-			listCount: String(item.count),
-			restaurants: JSON.stringify(
-				item.places.map((p) => ({
-				id: p.id, place_name: p.name, category_name: p.categoryName,
-				address_name: p.address, road_address_name: p.address,
-				phone: '', place_url: p.placeUrl,
-				}))
-			),
-			},
-		});
+	router.push(`/share/${item.shareToken}` as any);  // ← 경로 방식으로
 	};
 
   return (
