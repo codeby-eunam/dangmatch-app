@@ -177,19 +177,21 @@ export default function LibraryDetailScreen() {
 
   /* ── 가게 삭제 ── */
   const handleRemovePlace = (placeId: string, placeName: string) => {
-    Alert.alert('가게 삭제', `"${placeName}"을(를) 이 보관함에서 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제', style: 'destructive',
-        onPress: () => {
-          if (contextList && listId) {
-            removePlaceFromList(listId, placeId);
-          } else {
-            setLocalList((prev) => prev.filter((r) => r.id !== placeId));
-          }
-        },
-      },
-    ]);
+    const doRemove = () => {
+      if (contextList && listId) {
+        removePlaceFromList(listId, placeId);
+      } else {
+        setLocalList((prev) => prev.filter((r) => r.id !== placeId));
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`"${placeName}"을(를) 이 보관함에서 삭제할까요?`)) doRemove();
+    } else {
+      Alert.alert('가게 삭제', `"${placeName}"을(를) 이 보관함에서 삭제할까요?`, [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: doRemove },
+      ]);
+    }
   };
 
   /* ── 순서 바꾸기 (드래그) ── */
@@ -246,17 +248,18 @@ export default function LibraryDetailScreen() {
   /* ── 보관함 삭제 ── */
   const handleDeleteList = () => {
     setOptionsVisible(false);
-    Alert.alert('보관함 삭제', `"${title}"을(를) 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제', style: 'destructive',
-        onPress: () => {
-          console.log('Deleting list with ID:', listId);
-          if (contextList && listId) deleteList(listId);
-          router.back();
-        },
-      },
-    ]);
+    const doDelete = () => {
+      if (contextList && listId) deleteList(listId);
+      router.back();
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`"${title}"을(를) 삭제할까요?`)) doDelete();
+    } else {
+      Alert.alert('보관함 삭제', `"${title}"을(를) 삭제할까요?`, [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: doDelete },
+      ]);
+    }
   };
 
   /* ── 이름 수정 ── */
