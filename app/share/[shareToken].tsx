@@ -94,6 +94,21 @@ export default function ShareDetailScreen() {
     });
   };
 
+  const handleSwipe = () => {
+    router.push({
+      pathname: '/swipe' as any,
+      params: {
+        restaurants: JSON.stringify(
+          restaurantList.map((r) => ({
+            id: r.id, place_name: r.name, category_name: r.category,
+            address_name: r.desc, road_address_name: '', phone: '', place_url: '',
+          }))
+        ),
+        locationName: listData?.title ?? '',
+      },
+    });
+  };
+
   const handleEditPress = () => {
     if (!listData?.id) return;
     router.push({
@@ -152,9 +167,13 @@ export default function ShareDetailScreen() {
               <Text style={s.editTxt}>편집</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity style={s.swipeBtn} onPress={handleSwipe} activeOpacity={0.85}>
+            <MaterialIcons name="swipe" size={15} color="#FFFFFF" />
+            <Text style={s.swipeTxt}>Swipe</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={s.tournamentBtn} onPress={handleTournament} activeOpacity={0.85}>
             <Text style={s.trophyEmoji}>🏆</Text>
-            <Text style={s.tournamentTxt}>Tournament 시작</Text>
+            <Text style={s.tournamentTxt}>Tournament</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -257,6 +276,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1E7874',
   },
   editTxt: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  swipeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1E7874',
+  },
+  swipeTxt: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   tournamentBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#FF6B35',

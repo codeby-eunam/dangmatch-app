@@ -78,11 +78,12 @@ export function FloatingContactButton({ bottomOffset = 0 }: Props) {
         onRequestClose={closeModal}
         statusBarTranslucent
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={closeModal}
-        >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={closeModal}
+          />
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.kvAware}
@@ -133,7 +134,7 @@ export function FloatingContactButton({ bottomOffset = 0 }: Props) {
               </View>
             </View>
           </KeyboardAvoidingView>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </>
   );
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  overlay: {
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
