@@ -59,7 +59,9 @@ export default function SwipeScreen() {
   }>();
   const { lists, addList, addPlacesToList } = useLibrary();
 
-  const restaurants: Restaurant[] = JSON.parse(json || '[]');
+  const [restaurants] = useState<Restaurant[]>(() =>
+    [...(JSON.parse(json || '[]') as Restaurant[])].sort(() => Math.random() - 0.5)
+  );
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState<Restaurant[]>([]);
   const [done, setDone] = useState(false);

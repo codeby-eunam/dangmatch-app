@@ -308,6 +308,28 @@ export default function LibraryDetailScreen() {
     });
   };
 
+  const handleSwipe = () => {
+    const source = contextList?.places ?? [];
+    router.push({
+      pathname: '/swipe' as any,
+      params: {
+        restaurants: JSON.stringify(
+          source.length > 0
+            ? source.map((p) => ({
+                id: p.id, place_name: p.name, category_name: p.categoryName,
+                address_name: p.address, road_address_name: '', phone: '',
+                place_url: p.placeUrl ?? '',
+              }))
+            : restaurantList.map((r) => ({
+                id: r.id, place_name: r.name, category_name: r.category,
+                address_name: r.desc, road_address_name: '', phone: '', place_url: '',
+              }))
+        ),
+        locationName: title,
+      },
+    });
+  };
+
   /* ─────────── render ─────────── */
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -322,9 +344,13 @@ export default function LibraryDetailScreen() {
             <MaterialIcons name="ios-share" size={15} color="#374151" />
             <Text style={s.shareTxt}>공유하기</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={s.swipeBtn} onPress={handleSwipe} activeOpacity={0.85}>
+            <MaterialIcons name="swipe" size={15} color="#FFFFFF" />
+            <Text style={s.swipeTxt}>Swipe</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={s.tournamentBtn} onPress={handleTournament} activeOpacity={0.85}>
             <Text style={s.trophyEmoji}>🏆</Text>
-            <Text style={s.tournamentTxt}>Tournament 시작</Text>
+            <Text style={s.tournamentTxt}>Tournament</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -616,6 +642,11 @@ const s = StyleSheet.create({
   },
   shareTxt: { fontSize: 13, fontWeight: '500', color: '#374151' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  swipeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1E7874',
+  },
+  swipeTxt: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   tournamentBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#FF6B35',
