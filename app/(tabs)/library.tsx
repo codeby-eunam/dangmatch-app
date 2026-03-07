@@ -177,11 +177,20 @@ export default function LibraryScreen() {
 
   const handleDelete = () => {
     if (!optionTarget) return;
+    const targetId = optionTarget.id;
+    const targetTitle = optionTarget.title;
     closeOption();
-    Alert.alert('보관함 삭제', `"${optionTarget.title}"을(를) 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: () => deleteList(optionTarget.id) },
-    ]);
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`"${targetTitle}"을(를) 삭제할까요?`)) {
+        deleteList(targetId);
+      }
+    } else {
+      Alert.alert('보관함 삭제', `"${targetTitle}"을(를) 삭제할까요?`, [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => deleteList(targetId) },
+      ]);
+    }
   };
 
   const handleRenameOpen = () => {
