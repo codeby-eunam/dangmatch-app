@@ -124,7 +124,7 @@ function toListItem(raw: {
     places,
     isPublic: raw.isPublic,
     shareToken: raw.shareToken,
-	ownerUid: raw.ownerUid ?? raw.ownerUserId,
+	ownerUid: raw.ownerUid,
 	ownerUserId: raw.ownerUserId,
   };
 }
