@@ -76,7 +76,6 @@ export default function ShareDetailScreen() {
     Share.share({
       message: `Dangmatch에서 "${listData?.title}" 리스트를 확인해보세요!\n${shareUrl}`,
       url: shareUrl,
-      title: listData?.title,
     });
   };
 

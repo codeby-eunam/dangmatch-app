@@ -162,7 +162,7 @@ export default function ResultScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `오늘의 맛집: ${winner.place_name}\n${winner.road_address_name || winner.address_name}`,
+        message: `오늘의 맛집: ${winner.place_name}\n${winner.road_address_name || winner.address_name}\n${winner.place_url}`,
       });
     } catch {
       Alert.alert('공유 실패', '공유하는 중 오류가 발생했습니다.');
