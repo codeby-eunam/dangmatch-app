@@ -2,6 +2,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { Platform } from 'react-native';
+import { Analytics } from '@vercel/analytics/react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { LibraryProvider } from '@/context/LibraryContext';
@@ -33,6 +35,7 @@ export default function RootLayout() {
 			<Stack.Screen name="share" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
+          {Platform.OS === 'web' && <Analytics />}
         </ThemeProvider>
       </LibraryProvider>
     </UserProvider>

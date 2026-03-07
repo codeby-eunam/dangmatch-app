@@ -300,11 +300,11 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       const target = listsRef.current.find((l) => l.id === listId);
       setLists((prev) => prev.filter((l) => l.id !== listId));
 
-      if (target && user?.kakaoId && target.shareToken) {
+      if (target && user?.kakaoId) {
         apiFetch(`${BASE_URL}/api/lists/${listId}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: user.kakaoId, shareToken: target.shareToken }),
+          body: JSON.stringify({ uid: user.kakaoId }),
         }).catch((err) => console.error('[LibraryContext] deleteList 실패:', err));
       }
     },
