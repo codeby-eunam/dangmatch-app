@@ -124,7 +124,11 @@ function toListItem(raw: {
     places,
     isPublic: raw.isPublic,
     shareToken: raw.shareToken,
+<<<<<<< Updated upstream
 	ownerUid: raw.ownerUid ?? raw.ownerUserId,
+=======
+	ownerUid: raw.ownerUid,
+>>>>>>> Stashed changes
 	ownerUserId: raw.ownerUserId,
   };
 }
