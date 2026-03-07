@@ -70,9 +70,11 @@ export default function LibraryDetailScreen() {
   const contextList = lists.find((l) => l.id === listId);
 
   /* 내 보관함 여부 */
-  const isOwner = !!user?.kakaoId && (
-    contextList ? contextList.ownerUid === user.kakaoId : false
-  );
+	const normalizeUid = (uid?: string) => uid?.replace('kakao:', '') ?? '';
+
+	const isOwner = !!user?.kakaoId &&
+		!!contextList &&
+		normalizeUid(contextList.ownerUid) === normalizeUid(user.kakaoId);
 
   const parseFromParam = (): Restaurant[] => {
     if (!restaurantsParam) return [];
