@@ -1,7 +1,3 @@
-// Firebase 설정값은 환경변수로 관리됩니다.
-// 로컬: .env 파일 (git 제외)
-// 배포: EAS / Vercel 등 플랫폼 환경변수 설정
-
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,

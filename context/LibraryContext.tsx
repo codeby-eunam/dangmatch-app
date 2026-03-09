@@ -49,7 +49,7 @@ interface LibraryContextValue {
 
 // ─── 상수 ──────────────────────────────────────────────────────────────────
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dangmatch-y7al.vercel.app';
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dangmatch.vercel.app';
 export { toListItem };
 const TOGGLE_DEBOUNCE_MS = 1500;
 

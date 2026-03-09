@@ -31,7 +31,6 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": false,
       "package": "com.dangmatch.app"
     },
     "web": {
