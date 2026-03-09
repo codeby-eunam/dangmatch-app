@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,8 +7,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import KakaoWebView from '@/components/KakaoWebView';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { recordWin, recordLoss } from '@/lib/firestore';
+import { getWinCountBadge } from '@/lib/restaurantBadge';
 
 type Restaurant = {
   id: string;
@@ -79,6 +83,20 @@ export default function TournamentScreen() {
   const [selectedSide, setSelectedSide] = useState<'left' | 'right' | null>(null);
   const [history, setHistory] = useState<MatchSnapshot[]>([]);
 
+  // 참가 식당들의 winCount를 Firestore에서 일괄 조회
+  const [winCountMap, setWinCountMap] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (all.length === 0) return;
+    Promise.all(all.map((r) => getDoc(doc(db, 'restaurants', r.id))))
+      .then((snaps) => {
+        const map = new Map(
+          snaps.map((snap, i) => [all[i].id, (snap.data()?.winCount as number) ?? 0]),
+        );
+        setWinCountMap(map);
+      })
+      .catch((err) => console.warn('[tournament] winCount 조회 실패', err));
+  }, []);
+
   const totalMatches = Math.floor(bracket.length / 2);
   const left = bracket[matchIdx * 2];
   const right = bracket[matchIdx * 2 + 1];
@@ -107,6 +125,12 @@ export default function TournamentScreen() {
       setHistory((prev) => [...prev, { bracket, matchIdx, roundWinners, round }]);
     }
 
+    // 패배자 기록 (부전승 null은 제외)
+    const matchLeft = bracket[matchIdx * 2];
+    const matchRight = bracket[matchIdx * 2 + 1];
+    const loser = matchLeft?.id === winner.id ? matchRight : matchLeft;
+    if (loser) recordLoss(loser.id);
+
     let next = [...roundWinners, winner];
     let nextIdx = matchIdx + 1;
 
@@ -121,6 +145,7 @@ export default function TournamentScreen() {
 
     if (nextIdx >= totalMatches) {
       if (next.length === 1) {
+        recordWin(next[0].id);
         router.push({
           pathname: '/result' as any,
           params: { restaurant: JSON.stringify(next[0]) },
@@ -232,6 +257,9 @@ export default function TournamentScreen() {
             <Text style={[styles.cardName, selectedSide === 'left' && styles.cardNameLight]} numberOfLines={2}>
               {left.place_name}
             </Text>
+            <Text style={[styles.cardBadge, selectedSide === 'left' && styles.cardBadgeLight]} numberOfLines={1}>
+              {getWinCountBadge(winCountMap.get(left.id))}
+            </Text>
             {selectedSide === 'left' && (
               <View style={styles.selectBadge}>
                 <Text style={styles.selectBadgeText}>✓ 선택됨</Text>
@@ -258,6 +286,9 @@ export default function TournamentScreen() {
             </Text>
             <Text style={[styles.cardName, selectedSide === 'right' && styles.cardNameLight]} numberOfLines={2}>
               {right.place_name}
+            </Text>
+            <Text style={[styles.cardBadge, selectedSide === 'right' && styles.cardBadgeLight]} numberOfLines={1}>
+              {getWinCountBadge(winCountMap.get(right.id))}
             </Text>
             {selectedSide === 'right' && (
               <View style={styles.selectBadge}>
@@ -350,6 +381,8 @@ const styles = StyleSheet.create({
   cardCategoryLight: { color: 'rgba(255,255,255,0.8)' },
   cardName: { fontSize: 14, fontWeight: '800', color: '#111827' },
   cardNameLight: { color: '#FFFFFF' },
+  cardBadge: { fontSize: 10, color: '#6B7280', fontWeight: '500', marginTop: 2 },
+  cardBadgeLight: { color: 'rgba(255,255,255,0.75)' },
 
   selectBadge: {
     alignSelf: 'flex-start',

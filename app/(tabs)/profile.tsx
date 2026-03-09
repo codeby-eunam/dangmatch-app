@@ -12,45 +12,49 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useUser, setLoginReturnTo } from '@/context/UserContext';
+import { useUser, setLoginReturnTo, type Provider } from '@/context/UserContext';
 import { useLibrary } from '@/context/LibraryContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
 import * as ExpoLinking from 'expo-linking';
+import { API_BASE } from '@/lib/constants';
 
 const BADGE_EARLY = require('@/assets/images/badge-early-member.png');
-const API_BASE = 'https://dangmatch.vercel.app';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, isLoggedIn, loginWithKakao, logout } = useUser();
+  const { user, isLoggedIn, loginWithKakao, loginWithNaver, loginWithGoogle, logout, lastUsedProvider } = useUser();
   const { lists } = useLibrary();
   const scrollViewRef = useRef<ScrollView>(null);
   const [badgeCardY, setBadgeCardY] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
 
-	const handleKakaoLogin = async () => {
-	setLoginReturnTo('profile');
-	setLoading(true);
-	try {
-		if (Platform.OS === 'web') {
-		const redirectUri = ExpoLinking.createURL('auth/callback');
-		window.location.href = `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`;
-		return;
-		}
-		const result = await loginWithKakao();
-		if (result === null) return;
-		if (result.needsSetup) {
-		router.push({
-			pathname: '/setup-profile',
-			params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
-		});
-		}
-	} catch (err) {
-		Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
-	} finally {
-		setLoading(false);
-	}
-	};
+  const handleSocialLogin = async (provider: Provider) => {
+    setLoginReturnTo('profile');
+    setLoadingProvider(provider);
+    try {
+      if (Platform.OS === 'web') {
+        const redirectUri = ExpoLinking.createURL('auth/callback');
+        window.location.href = `${API_BASE}/api/auth/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+        return;
+      }
+      const loginFn =
+        provider === 'kakao' ? loginWithKakao :
+        provider === 'naver' ? loginWithNaver :
+        loginWithGoogle;
+      const result = await loginFn();
+      if (result === null) return;
+      if (result.needsSetup) {
+        router.push({
+          pathname: '/setup-profile',
+          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '', provider: result.provider },
+        });
+      }
+    } catch (err) {
+      Alert.alert('로그인 오류', err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
@@ -65,29 +69,65 @@ export default function ProfileScreen() {
 
   /* ─── 비로그인 상태 ─── */
   if (!isLoggedIn) {
+    const isLoading = loadingProvider !== null;
     return (
       <SafeAreaView style={s.container} edges={['top']}>
         <View style={s.loginRequiredWrap}>
           <Text style={s.loginEmoji}>🔒</Text>
           <Text style={s.loginTitle}>로그인이 필요해요</Text>
           <Text style={s.loginDesc}>
-            마이페이지를 이용하려면{'\n'}카카오 로그인이 필요합니다
+            마이페이지를 이용하려면{'\n'}소셜 로그인이 필요합니다
           </Text>
-          <TouchableOpacity
-            style={s.kakaoBtn}
-            onPress={handleKakaoLogin}
-            activeOpacity={0.85}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#3C1E1E" />
-            ) : (
-              <>
-                <Text style={s.kakaoIcon}>💬</Text>
-                <Text style={s.kakaoBtnText}>카카오로 로그인</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={s.loginBtnGroup}>
+            <TouchableOpacity
+              style={s.kakaoBtn}
+              onPress={() => handleSocialLogin('kakao')}
+              activeOpacity={0.85}
+              disabled={isLoading}
+            >
+              {loadingProvider === 'kakao' ? (
+                <ActivityIndicator color="#3C1E1E" />
+              ) : (
+                <>
+                  <Text style={[s.kakaoIcon, s.btnIconLeft]}>💬</Text>
+                  <Text style={s.kakaoBtnText}>카카오로 로그인</Text>
+                  {lastUsedProvider === 'kakao' && <View style={s.recentBadge}><Text style={[s.recentBadgeText, s.recentBadgeDark]}>최근 사용</Text></View>}
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.naverBtn}
+              onPress={() => handleSocialLogin('naver')}
+              activeOpacity={0.85}
+              disabled={isLoading}
+            >
+              {loadingProvider === 'naver' ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={[s.naverIcon, s.btnIconLeft]}>N</Text>
+                  <Text style={s.naverBtnText}>네이버로 로그인</Text>
+                  {lastUsedProvider === 'naver' && <View style={[s.recentBadge, s.recentBadgeLight]}><Text style={s.recentBadgeText}>최근 사용</Text></View>}
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.googleBtn}
+              onPress={() => handleSocialLogin('google')}
+              activeOpacity={0.85}
+              disabled={isLoading}
+            >
+              {loadingProvider === 'google' ? (
+                <ActivityIndicator color="#4285F4" />
+              ) : (
+                <>
+                  <Text style={[s.googleIcon, s.btnIconLeft]}>G</Text>
+                  <Text style={s.googleBtnText}>구글로 로그인</Text>
+                  {lastUsedProvider === 'google' && <View style={s.recentBadge}><Text style={[s.recentBadgeText, s.recentBadgeDark]}>최근 사용</Text></View>}
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -167,6 +207,14 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
+
+        {/* ── 나의 선택 기록 ── */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>나의 기록</Text>
+          <View style={s.menuCard}>
+            <MenuItem label="나의 선택 기록" icon="🍽️" onPress={() => router.push('/my-selections')} />
+          </View>
+        </View>
 
         {/* ── 설정 메뉴 ── */}
         <View style={s.section}>
@@ -263,10 +311,9 @@ const s = StyleSheet.create({
     backgroundColor: '#FEE500',
     borderRadius: 14,
     paddingVertical: 16,
-    paddingHorizontal: 36,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
     marginTop: 8,
     shadowColor: '#FEE500',
     shadowOpacity: 0.45,
@@ -274,8 +321,35 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
+  btnIconLeft: { position: 'absolute', left: 18 },
   kakaoIcon: { fontSize: 20 },
   kakaoBtnText: { fontSize: 16, fontWeight: '700', color: '#3C1E1E' },
+  loginBtnGroup: { width: '100%', gap: 10, marginTop: 8 },
+  naverBtn: {
+    backgroundColor: '#03C75A', borderRadius: 16, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#03C75A', shadowOpacity: 0.35, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 4,
+  },
+  naverIcon: { fontSize: 18, fontWeight: '900', color: '#FFFFFF', width: 20, textAlign: 'center' as const },
+  naverBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  googleBtn: {
+    backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#E5E7EB',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  },
+  googleIcon: { fontSize: 18, fontWeight: '900', color: '#4285F4', width: 20, textAlign: 'center' as const },
+  googleBtnText: { fontSize: 16, fontWeight: '700', color: '#374151' },
+  recentBadge: {
+    position: 'absolute', right: 14,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
+  },
+  recentBadgeLight: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  recentBadgeText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
+  recentBadgeDark: { color: '#3C1E1E' },
 
   /* 프로필 헤더 */
   profileHeader: {

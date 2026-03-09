@@ -17,6 +17,11 @@ import { FloatingContactButton } from '@/components/floating-contact-button';
 // ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
 import { logRestaurantSelected } from '@/lib/analytics';
 // ─────────────────────────────────────────────────────────────────────────
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { API_BASE } from '@/lib/constants';
+import { getWinCountBadge } from '@/lib/restaurantBadge';
+import { useUser } from '@/context/UserContext';
 
 type Restaurant = {
   id: string;
@@ -57,8 +62,17 @@ const confettiConfig = Array.from({ length: CONFETTI_COUNT }, () => ({
 export default function ResultScreen() {
   const router = useRouter();
   const { restaurant: json } = useLocalSearchParams<{ restaurant: string }>();
+  const { user, isLoggedIn } = useUser();
 
   const winner: Restaurant | null = json ? JSON.parse(json) : null;
+
+  const [winCount, setWinCount] = useState<number | undefined>();
+  useEffect(() => {
+    if (!winner) return;
+    getDoc(doc(db, 'restaurants', winner.id))
+      .then((snap) => setWinCount((snap.data()?.winCount as number) ?? undefined))
+      .catch(console.warn);
+  }, [winner?.id]);
 
   /* ── 컨페티 상태 & 애니메이션 값 ── */
   const [showConfetti, setShowConfetti] = useState(false);
@@ -124,21 +138,48 @@ export default function ResultScreen() {
   // 결과 화면 진입 즉시 컨페티 시작, 언마운트 시 정리
   useEffect(() => {
     startConfetti();
-    // ── [Firebase Analytics] 최종 선택 가게 기록 ──────────────────────
-    if (winner) {
-      logRestaurantSelected(
-        winner.id,
-        winner.place_name,
-        getCategoryLabel(winner.category_name),
-        'random',
-        '',
-      );
-    }
-    // ────────────────────────────────────────────────────────────────────
     return () => {
       confettiActiveRef.current = false;
     };
   }, [startConfetti]);
+
+  // ── [Firebase Analytics + Firestore] user 로드 완료 후 실행 ──────────
+  const loggedRef = useRef(false);
+  useEffect(() => {
+    if (!winner || loggedRef.current) return;
+    // Analytics는 user 여부 무관하게 기록
+    logRestaurantSelected(
+      winner.id,
+      winner.place_name,
+      getCategoryLabel(winner.category_name),
+      'random',
+      '',
+      user?.userId ?? undefined,
+    );
+    // userlog는 로그인 유저만 서버 API로 저장
+    if (isLoggedIn && user) {
+      loggedRef.current = true;
+      fetch(`${API_BASE}/api/userlog`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.kakaoId,
+          restaurantId: winner.id,
+          restaurantName: winner.place_name,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.skipped) {
+            console.log('[userlog] 오늘 이미 선택한 맛집, 저장 건너뜀 ⏭️', winner.place_name);
+          } else {
+            console.log('[userlog] 저장 완료 ✅', data.id, winner.place_name);
+          }
+        })
+        .catch((err) => console.error('[userlog] 저장 실패 ❌', err));
+    }
+  }, [winner, isLoggedIn, user]);
+  // ─────────────────────────────────────────────────────────────────────
 
   if (!winner) {
     return (
@@ -205,11 +246,7 @@ export default function ResultScreen() {
           </View>
 
           <View style={styles.cardInfo}>
-            <View style={styles.ratingRow}>
-              <Text style={styles.ratingStar}>★</Text>
-              <Text style={styles.ratingScore}>4.9</Text>
-              <Text style={styles.ratingCount}>(200+)</Text>
-            </View>
+            <Text style={styles.winBadge}>{getWinCountBadge(winCount)}</Text>
             <Text style={styles.restaurantName}>{winner.place_name}</Text>
             <Text style={styles.restaurantAddress} numberOfLines={2}>
               {winner.road_address_name || winner.address_name || '오늘 당신을 위한 최고의 선택입니다.'}
@@ -374,10 +411,7 @@ const styles = StyleSheet.create({
   winnerCategory: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
   winnerEmoji: { fontSize: 40, marginTop: 6 },
   cardInfo: { padding: 20, gap: 6 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  ratingStar: { fontSize: 14, color: '#FFD700' },
-  ratingScore: { fontSize: 14, fontWeight: '700', color: '#1a2a4a' },
-  ratingCount: { fontSize: 12, color: '#9CA3AF' },
+  winBadge: { fontSize: 13, color: '#FF6B35', fontWeight: '600' },
   restaurantName: { fontSize: 22, fontWeight: '900', color: '#1a2a4a' },
   restaurantAddress: { fontSize: 13, color: '#9CA3AF', lineHeight: 18 },
 
@@ -415,4 +449,5 @@ const styles = StyleSheet.create({
   /* 에러 상태 */
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   emptyText: { fontSize: 16, color: '#6B7280' },
+
 });

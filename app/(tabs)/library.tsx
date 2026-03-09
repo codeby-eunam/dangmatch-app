@@ -18,9 +18,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLibrary, type Place, type ListItem } from '@/context/LibraryContext';
-import { useUser, setLoginReturnTo } from '@/context/UserContext';
+import { useUser, setLoginReturnTo, type Provider } from '@/context/UserContext';
 import { FloatingContactButton } from '@/components/floating-contact-button';
 import * as ExpoLinking from 'expo-linking';
+import { API_BASE } from '@/lib/constants';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;
@@ -29,13 +30,12 @@ const CARD_W = (SCREEN_W - H_PAD * 2 - CARD_GAP) / 2;
 const IMG_SIZE = CARD_W / 2;
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dangmatch-y7al.vercel.app';
-const API_BASE = 'https://dangmatch.vercel.app';
 
 export default function LibraryScreen() {
   const router = useRouter();
   const { lists, listsLoading, addList, deleteList, renameList, togglePublic } = useLibrary();
-  const { isLoggedIn, loginWithKakao } = useUser();
-  const [loading, setLoading] = useState(false);
+  const { isLoggedIn, loginWithKakao, loginWithNaver, loginWithGoogle, lastUsedProvider } = useUser();
+  const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
 
   // ── 새 리스트 만들기 모달 ── (Rules of Hooks: 모든 훅은 조건부 return 전에 선언)
   const [modalVisible, setModalVisible] = useState(false);
@@ -58,56 +58,96 @@ export default function LibraryScreen() {
 
   const cardTotalH = CARD_W + 68 + 40; // 공개토글 행 높이 추가
 
-  // ── 카카오 로그인 핸들러 ──
-	const handleKakaoLogin = async () => {
-	setLoginReturnTo('library');
-	setLoading(true);
-	try {
-		if (Platform.OS === 'web') {
-		const redirectUri = ExpoLinking.createURL('auth/callback');
-		window.location.href = `${API_BASE}/api/auth/kakao?redirect_uri=${encodeURIComponent(redirectUri)}`;
-		return;
-		}
-		const result = await loginWithKakao();
-		if (result === null) return;
-		if (result.needsSetup) {
-		router.push({
-			pathname: '/setup-profile',
-			params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '' },
-		});
-		}
-	} catch {
-		Alert.alert('오류', '로그인에 실패했습니다. 다시 시도해주세요.');
-	} finally {
-		setLoading(false);
-	}
-	};
+  // ── 소셜 로그인 핸들러 ──
+  const handleSocialLogin = async (provider: Provider) => {
+    setLoginReturnTo('library');
+    setLoadingProvider(provider);
+    try {
+      if (Platform.OS === 'web') {
+        const redirectUri = ExpoLinking.createURL('auth/callback');
+        window.location.href = `${API_BASE}/api/auth/${provider}?redirect_uri=${encodeURIComponent(redirectUri)}`;
+        return;
+      }
+      const loginFn =
+        provider === 'kakao' ? loginWithKakao :
+        provider === 'naver' ? loginWithNaver :
+        loginWithGoogle;
+      const result = await loginFn();
+      if (result === null) return;
+      if (result.needsSetup) {
+        router.push({
+          pathname: '/setup-profile',
+          params: { kakaoId: result.kakaoId, profileImage: result.profileImage ?? '', provider: result.provider },
+        });
+      }
+    } catch {
+      Alert.alert('오류', '로그인에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
 
   // ── 비로그인 화면 ──
   if (!isLoggedIn) {
+    const isLoading = loadingProvider !== null;
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={s.loginRequiredWrap}>
           <Text style={s.loginEmoji}>📂</Text>
           <Text style={s.loginTitle}>로그인이 필요해요</Text>
           <Text style={s.loginDesc}>
-            보관함을 이용하려면{'\n'}카카오 로그인이 필요합니다
+            보관함을 이용하려면{'\n'}소셜 로그인이 필요합니다
           </Text>
-          <TouchableOpacity
-            style={s.kakaoBtn}
-            onPress={handleKakaoLogin}
-            activeOpacity={0.85}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#3C1E1E" />
-            ) : (
-              <>
-                <Text style={s.kakaoIcon}>💬</Text>
-                <Text style={s.kakaoBtnText}>카카오로 로그인</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={s.loginBtnGroup}>
+            <TouchableOpacity
+              style={s.kakaoBtn}
+              onPress={() => handleSocialLogin('kakao')}
+              activeOpacity={0.85}
+              disabled={isLoading}
+            >
+              {loadingProvider === 'kakao' ? (
+                <ActivityIndicator color="#3C1E1E" />
+              ) : (
+                <>
+                  <Text style={[s.kakaoIcon, s.btnIconLeft]}>💬</Text>
+                  <Text style={s.kakaoBtnText}>카카오로 로그인</Text>
+                  {lastUsedProvider === 'kakao' && <View style={s.recentBadge}><Text style={[s.recentBadgeText, s.recentBadgeDark]}>최근 사용</Text></View>}
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.naverBtn}
+              onPress={() => handleSocialLogin('naver')}
+              activeOpacity={0.85}
+              disabled={isLoading}
+            >
+              {loadingProvider === 'naver' ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={[s.naverIcon, s.btnIconLeft]}>N</Text>
+                  <Text style={s.naverBtnText}>네이버로 로그인</Text>
+                  {lastUsedProvider === 'naver' && <View style={[s.recentBadge, s.recentBadgeLight]}><Text style={s.recentBadgeText}>최근 사용</Text></View>}
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.googleBtn}
+              onPress={() => handleSocialLogin('google')}
+              activeOpacity={0.85}
+              disabled={isLoading}
+            >
+              {loadingProvider === 'google' ? (
+                <ActivityIndicator color="#4285F4" />
+              ) : (
+                <>
+                  <Text style={[s.googleIcon, s.btnIconLeft]}>G</Text>
+                  <Text style={s.googleBtnText}>구글로 로그인</Text>
+                  {lastUsedProvider === 'google' && <View style={s.recentBadge}><Text style={[s.recentBadgeText, s.recentBadgeDark]}>최근 사용</Text></View>}
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -665,11 +705,38 @@ const s = StyleSheet.create({
   loginTitle: { fontSize: 22, fontWeight: '800', color: '#1F2937' },
   loginDesc: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22, marginBottom: 8 },
   kakaoBtn: {
-    backgroundColor: '#FEE500', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 36,
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8,
+    backgroundColor: '#FEE500', borderRadius: 14, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8,
     shadowColor: '#FEE500', shadowOpacity: 0.45, shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 }, elevation: 4,
   },
+  btnIconLeft: { position: 'absolute', left: 18 },
   kakaoIcon: { fontSize: 20 },
   kakaoBtnText: { fontSize: 16, fontWeight: '700', color: '#3C1E1E' },
+  loginBtnGroup: { width: '100%', gap: 10, marginTop: 8 },
+  naverBtn: {
+    backgroundColor: '#03C75A', borderRadius: 16, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#03C75A', shadowOpacity: 0.35, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 4,
+  },
+  naverIcon: { fontSize: 18, fontWeight: '900', color: '#FFFFFF', width: 20, textAlign: 'center' },
+  naverBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  googleBtn: {
+    backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#E5E7EB',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  },
+  googleIcon: { fontSize: 18, fontWeight: '900', color: '#4285F4', width: 20, textAlign: 'center' },
+  googleBtnText: { fontSize: 16, fontWeight: '700', color: '#374151' },
+  recentBadge: {
+    position: 'absolute', right: 14,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
+  },
+  recentBadgeLight: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  recentBadgeText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
+  recentBadgeDark: { color: '#3C1E1E' },
 });

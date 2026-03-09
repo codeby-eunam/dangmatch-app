@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Alert,
+  Animated,
   Modal,
   StyleSheet,
   TextInput,
@@ -16,6 +17,9 @@ import { useLibrary, type Place } from '@/context/LibraryContext';
 // ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
 import { logCardViewed, logRestaurantSelected } from '@/lib/analytics';
 // ─────────────────────────────────────────────────────────────────────────
+import { recordSwipeChoice, recordSwipePass } from '@/lib/firestore';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const BG_TEAL = '#1E7874';
 const ORANGE = '#F57C4A';
@@ -65,11 +69,33 @@ export default function SwipeScreen() {
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState<Restaurant[]>([]);
   const [done, setDone] = useState(false);
+  const [swipeDir, setSwipeDir] = useState<'pass' | 'yumi' | null>(null);
 
   // ── [Firebase Analytics] 카드 체류 시간 측정 ────────────────────────────
   const viewStartRef = useRef(Date.now());
   useEffect(() => { viewStartRef.current = Date.now(); }, [index]);
   // ────────────────────────────────────────────────────────────────────────
+
+  // ── 애니메이션 refs ─────────────────────────────────────────────────────
+  const cardTranslateX = useRef(new Animated.Value(0)).current;
+  const cardRotate = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const passScale = useRef(new Animated.Value(1)).current;
+  const yumiScale = useRef(new Animated.Value(1)).current;
+  const sheetSlide = useRef(new Animated.Value(320)).current;
+  // ────────────────────────────────────────────────────────────────────────
+
+  // 완료 시트 슬라이드업
+  useEffect(() => {
+    if (done) {
+      Animated.spring(sheetSlide, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start();
+    }
+  }, [done]);
 
   // 보관함 모달 상태
   const [saveModalVisible, setSaveModalVisible] = useState(false);
@@ -79,12 +105,29 @@ export default function SwipeScreen() {
   const current = restaurants[index];
   const progress = restaurants.length > 0 ? (index + 1) / restaurants.length : 0;
 
+  // 현재 카드의 오늘 선택 수
+  const [choiceCount, setChoiceCount] = useState<number>(0);
+  useEffect(() => {
+    if (!current) return;
+    setChoiceCount(0);
+    getDoc(doc(db, 'restaurants', current.id))
+      .then((snap) => setChoiceCount((snap.data()?.choiceCount as number) ?? 0))
+      .catch(() => setChoiceCount(0));
+  }, [current?.id]);
+
   const advance = (like: boolean) => {
     // ── [Firebase Analytics] 카드 체류 시간 기록 ────────────────────────
     const dwellMs = Date.now() - viewStartRef.current;
     const catShort = current.category_name?.split(' > ').pop() ?? '기타';
     logCardViewed(current.id, current.place_name, catShort, locationName ?? '', dwellMs);
     // ────────────────────────────────────────────────────────────────────
+
+    // 스와이프 선택/패스 카운트 기록
+    if (like) {
+      recordSwipeChoice(current.id);
+    } else {
+      recordSwipePass(current.id);
+    }
 
     const next = [...liked, ...(like ? [current] : [])];
     if (index + 1 >= restaurants.length) {
@@ -95,6 +138,38 @@ export default function SwipeScreen() {
       setIndex((i) => i + 1);
     }
   };
+
+  const animateCard = (like: boolean) => {
+    const toX = like ? 500 : -500;
+    const btnScale = like ? yumiScale : passScale;
+
+    setSwipeDir(like ? 'yumi' : 'pass');
+
+    // 버튼 스케일 피드백
+    Animated.sequence([
+      Animated.spring(btnScale, { toValue: 0.82, useNativeDriver: true, speed: 80, bounciness: 0 }),
+      Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }),
+    ]).start();
+
+    // 카드 슬라이드 아웃
+    Animated.parallel([
+      Animated.timing(cardTranslateX, { toValue: toX, duration: 260, useNativeDriver: true }),
+      Animated.timing(cardRotate, { toValue: like ? 1 : -1, duration: 260, useNativeDriver: true }),
+      Animated.timing(cardOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      // 초기화 후 다음 카드 페이드인
+      cardTranslateX.setValue(0);
+      cardRotate.setValue(0);
+      setSwipeDir(null);
+      advance(like);
+      Animated.timing(cardOpacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    });
+  };
+
+  const rotateInterpolate = cardRotate.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-12deg', '0deg', '12deg'],
+  });
 
   const goToResult = (likedList: Restaurant[]) => {
     if (likedList.length === 1) {
@@ -169,7 +244,25 @@ export default function SwipeScreen() {
       </View>
 
       {/* WebView + 오늘의 픽 버튼 */}
-      <View style={styles.webCardContainer}>
+      <Animated.View
+        style={[
+          styles.webCardContainer,
+          {
+            transform: [
+              { translateX: cardTranslateX },
+              { rotate: rotateInterpolate },
+            ],
+            opacity: cardOpacity,
+          },
+        ]}
+      >
+        {/* 오늘 선택 수 배지 */}
+        {choiceCount > 0 && (
+          <View style={styles.choiceBadge} pointerEvents="none">
+            <Text style={styles.choiceBadgeText}>🔥 오늘 {choiceCount}명이 선택!</Text>
+          </View>
+        )}
+
         <View style={styles.webViewWrapper}>
           <KakaoWebView
             uri={webUrl}
@@ -179,6 +272,21 @@ export default function SwipeScreen() {
             phone={current.phone}
           />
         </View>
+
+        {/* PASS 오버레이 */}
+        {swipeDir === 'pass' && (
+          <View style={[styles.swipeOverlay, styles.swipeOverlayPass]}>
+            <Text style={styles.swipeLabelPass}>PASS</Text>
+          </View>
+        )}
+
+        {/* YUMI 오버레이 */}
+        {swipeDir === 'yumi' && (
+          <View style={[styles.swipeOverlay, styles.swipeOverlayYumi]}>
+            <Text style={styles.swipeLabelYumi}>YUMI!</Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.todayPickBtn}
           onPress={() => goToResult([current])}
@@ -186,29 +294,33 @@ export default function SwipeScreen() {
         >
           <Text style={styles.todayPickText}>⭐ 오늘의 픽!</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* 액션 버튼 */}
       <View style={styles.actions}>
         <View style={styles.actionItem}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.passBtn]}
-            onPress={() => advance(false)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.passIcon}>✕</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: passScale }] }}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.passBtn]}
+              onPress={() => animateCard(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.passIcon}>✕</Text>
+            </TouchableOpacity>
+          </Animated.View>
           <Text style={styles.actionLabel}>PASS</Text>
         </View>
 
         <View style={styles.actionItem}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.yumiBtn]}
-            onPress={() => advance(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.yumiIcon}>🍴</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: yumiScale }] }}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.yumiBtn]}
+              onPress={() => animateCard(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.yumiIcon}>🍴</Text>
+            </TouchableOpacity>
+          </Animated.View>
           <Text style={[styles.actionLabel, styles.yumiLabel]}>YUMI!</Text>
         </View>
       </View>
@@ -241,7 +353,7 @@ export default function SwipeScreen() {
       {/* ── 완료 오버레이 ── */}
       {done && (
         <View style={styles.overlay}>
-          <View style={styles.sheet}>
+          <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetSlide }] }]}>
             {/* 타이틀 */}
             <Text style={styles.sheetTitle}>선택한 가게 목록</Text>
             <View style={styles.divider} />
@@ -309,7 +421,7 @@ export default function SwipeScreen() {
             >
               <Text style={styles.homeBtnText}>홈화면으로 이동하기</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       )}
 
@@ -513,6 +625,45 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   loaderText: { color: '#666', fontSize: 14 },
+
+  /* ── 스와이프 오버레이 ── */
+  swipeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9,
+  },
+  swipeOverlayPass: {
+    backgroundColor: 'rgba(239, 68, 68, 0.35)',
+  },
+  swipeOverlayYumi: {
+    backgroundColor: 'rgba(245, 124, 74, 0.35)',
+  },
+  swipeLabelPass: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#EF4444',
+    letterSpacing: 4,
+    transform: [{ rotate: '-15deg' }],
+    borderWidth: 4,
+    borderColor: '#EF4444',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  swipeLabelYumi: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: ORANGE,
+    letterSpacing: 4,
+    transform: [{ rotate: '15deg' }],
+    borderWidth: 4,
+    borderColor: ORANGE,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
 
   /* ── 액션 버튼 ── */
   actions: {
@@ -791,4 +942,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   cancelTxt: { fontSize: 15, fontWeight: '600', color: '#374151' },
+
+  /* ── 오늘 선택 수 배지 ── */
+  choiceBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: ORANGE,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+    zIndex: 10,
+  },
+  choiceBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
 });

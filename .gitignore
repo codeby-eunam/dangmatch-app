@@ -30,10 +30,14 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Firebase / 환경변수 (민감 정보)
+.env
+
 # local env files
 .env*.local
 .env.development
 .env.production
+.env.example
 
 # typescript
 *.tsbuildinfo

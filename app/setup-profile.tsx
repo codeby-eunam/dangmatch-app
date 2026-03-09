@@ -21,7 +21,7 @@ const USER_ID_REGEX = /^@[a-zA-Z][a-zA-Z0-9._]{1,19}$/;
 
 export default function SetupProfileScreen() {
   const router = useRouter();
-  const { kakaoId = '', profileImage = '' } = useLocalSearchParams<{ kakaoId: string; profileImage: string }>();
+  const { kakaoId = '', profileImage = '', provider = 'kakao' } = useLocalSearchParams<{ kakaoId: string; profileImage: string; provider: string }>();
   const { setupProfile, checkUserIdAvailable } = useUser();
 
   const [userId, setUserId] = useState('@');
@@ -71,7 +71,7 @@ export default function SetupProfileScreen() {
 
     setSubmitting(true);
     try {
-      await setupProfile(userId, nickname.trim(), kakaoId, profileImage || undefined);
+      await setupProfile(userId, nickname.trim(), kakaoId, (provider as 'kakao' | 'naver' | 'google') || 'kakao', profileImage || undefined);
       router.replace('/(tabs)');
     } catch (err) {
       const message = err instanceof Error ? err.message : '알 수 없는 오류';

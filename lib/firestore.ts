@@ -18,6 +18,8 @@ import {
   serverTimestamp,
   doc,
   setDoc,
+  runTransaction,
+  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -79,6 +81,93 @@ export async function saveReview(
     timestamp: serverTimestamp(),
   });
   return ref.id;
+}
+
+/**
+ * 우승 후 방문 데이터 기록.
+ * restaurants/{id} 문서에 누적 합계를 업데이트하고 평균을 캐싱.
+ *  - price    → totalPriceSum / priceCount → avgPrice (원)
+ *  - partySize → totalPartySizeSum / partySizeCount → avgPartySize (명)
+ */
+export async function recordVisitData(
+  restaurantId: string,
+  { price, partySize }: { price?: number; partySize?: number },
+): Promise<void> {
+  if (!price && !partySize) return;
+  const ref = doc(db, 'restaurants', restaurantId);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.data() ?? {};
+      const updates: Record<string, number> = {};
+
+      if (price != null && price > 0) {
+        const newSum = (data.totalPriceSum ?? 0) + price;
+        const newCount = (data.priceCount ?? 0) + 1;
+        updates.totalPriceSum = newSum;
+        updates.priceCount = newCount;
+        updates.avgPrice = Math.round(newSum / newCount);
+      }
+
+      if (partySize != null && partySize > 0) {
+        const newSum = (data.totalPartySizeSum ?? 0) + partySize;
+        const newCount = (data.partySizeCount ?? 0) + 1;
+        updates.totalPartySizeSum = newSum;
+        updates.partySizeCount = newCount;
+        updates.avgPartySize = Math.round((newSum / newCount) * 10) / 10;
+      }
+
+      tx.update(ref, updates);
+    });
+  } catch (err) {
+    console.warn('[firestore] recordVisitData 실패', err);
+  }
+}
+
+/**
+ * 토너먼트 최종 우승 — winCount++ 후 winRate 재계산 (transaction)
+ */
+export async function recordWin(restaurantId: string): Promise<void> {
+  const ref = doc(db, 'restaurants', restaurantId);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.data() ?? {};
+      const newWinCount = (data.winCount ?? 0) + 1;
+      const tournamentCount = Math.max(data.tournamentCount ?? 1, 1);
+      const winRate = newWinCount / tournamentCount;
+      tx.update(ref, { winCount: newWinCount, winRate });
+    });
+  } catch (err) {
+    console.warn('[stats] recordWin 실패', err);
+  }
+}
+
+/**
+ * 1v1 토너먼트 패배 — loseCount++
+ */
+export function recordLoss(restaurantId: string): void {
+  setDoc(doc(db, 'restaurants', restaurantId), {
+    loseCount: increment(1),
+  }, { merge: true }).catch((err) => console.warn('[stats] recordLoss 실패', err));
+}
+
+/**
+ * 스와이프 선택 (YUMI) — choiceCount++
+ */
+export function recordSwipeChoice(restaurantId: string): void {
+  setDoc(doc(db, 'restaurants', restaurantId), {
+    choiceCount: increment(1),
+  }, { merge: true }).catch((err) => console.warn('[stats] recordSwipeChoice 실패', err));
+}
+
+/**
+ * 스와이프 패스 (PASS) — passCount++
+ */
+export function recordSwipePass(restaurantId: string): void {
+  setDoc(doc(db, 'restaurants', restaurantId), {
+    passCount: increment(1),
+  }, { merge: true }).catch((err) => console.warn('[stats] recordSwipePass 실패', err));
 }
 
 /**

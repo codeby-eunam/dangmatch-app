@@ -10,7 +10,6 @@ interface Props {
 }
 
 const ORANGE = '#F57C4A';
-const BG_TEAL = '#1E7874';
 
 export default function KakaoWebView({ uri, placeName, category, address, phone }: Props) {
   return (
@@ -19,22 +18,22 @@ export default function KakaoWebView({ uri, placeName, category, address, phone 
         <Text style={styles.icon}>🍽️</Text>
       </View>
 
-      {placeName && <Text style={styles.name}>{placeName}</Text>}
+      {!!placeName && <Text style={styles.name}>{placeName}</Text>}
 
-      {category && (
+      {!!category && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{category}</Text>
         </View>
       )}
 
-      {address && (
+      {!!address && (
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📍</Text>
           <Text style={styles.infoText}>{address}</Text>
         </View>
       )}
 
-      {phone && (
+      {!!phone && (
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📞</Text>
           <Text style={styles.infoText}>{phone}</Text>

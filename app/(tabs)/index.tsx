@@ -21,6 +21,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FloatingContactButton } from '@/components/floating-contact-button';
 import { useUser } from '@/context/UserContext';
+import { API_BASE } from '@/lib/constants';
 // ── [Firebase Analytics] 동작 확인 후 주석 처리 예정 ────────────────────
 import { logFilterSelected, logLocationSearched } from '@/lib/analytics';
 // ─────────────────────────────────────────────────────────────────────────
@@ -37,8 +38,6 @@ const FOOD_FILTERS = [
   { id: 'asian',    label: '아시안', emoji: '🍜' },
   { id: 'cafe',     label: '카페',   emoji: '☕' },
 ];
-
-const API_BASE = 'https://dangmatch.vercel.app';
 
 const RECENT_KEY = 'recentLocationSearches';
 
